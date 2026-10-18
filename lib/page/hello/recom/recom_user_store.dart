@@ -29,7 +29,7 @@ abstract class _RecomUserStoreBase with Store {
   _RecomUserStoreBase(this.controller);
 
   @action
-  fetch() async {
+  Future<bool> fetch() async {
     nextUrl = null;
     try {
       final result = await apiClient.getUserRecommended();
@@ -38,13 +38,15 @@ abstract class _RecomUserStoreBase with Store {
       users.clear();
       users.addAll(response.user_previews);
       controller?.finishRefresh(IndicatorResult.success);
+      return true;
     } catch (e) {
       controller?.finishRefresh(IndicatorResult.fail);
+      return false;
     }
   }
 
   @action
-  next() async {
+  Future<bool> next() async {
     try {
       if (nextUrl != null && nextUrl!.isNotEmpty) {
         final result = await apiClient.getNext(nextUrl!);
@@ -55,8 +57,10 @@ abstract class _RecomUserStoreBase with Store {
       } else {
         controller?.finishLoad(IndicatorResult.noMore);
       }
+      return true;
     } catch (e) {
       controller?.finishLoad(IndicatorResult.fail);
+      return false;
     }
   }
 }

@@ -14,23 +14,30 @@
  *
  */
 
+import 'dart:math';
+
 import 'package:easy_refresh/easy_refresh.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
 import 'package:pixez/component/painer_card.dart';
-import 'package:pixez/component/pixez_default_header.dart';
+import 'package:pixez/component/swipe_paged_grid.dart';
+import 'package:pixez/i18n.dart';
 import 'package:pixez/lighting/lighting_store.dart';
 import 'package:pixez/page/painter/painter_list_store.dart';
-import 'package:waterfall_flow/waterfall_flow.dart';
 
 class PainterList extends StatefulWidget {
   final FutureGet futureGet;
   final bool isNovel;
   final Widget? header;
+  final double footerTrailingSpace;
 
-  const PainterList(
-      {Key? key, required this.futureGet, this.isNovel = false, this.header})
-      : super(key: key);
+  const PainterList({
+    Key? key,
+    required this.futureGet,
+    this.isNovel = false,
+    this.header,
+    this.footerTrailingSpace = 0,
+  }) : super(key: key);
 
   @override
   _PainterListState createState() => _PainterListState();
@@ -39,17 +46,32 @@ class PainterList extends StatefulWidget {
 class _PainterListState extends State<PainterList> {
   late EasyRefreshController _easyRefreshController;
   late PainterListStore _painterListStore;
-  late ScrollController _scrollController;
+  bool _loading = true;
+  int _resetToken = 0;
 
   @override
   void initState() {
-    _scrollController = ScrollController();
-    _easyRefreshController = EasyRefreshController(
-        controlFinishLoad: true, controlFinishRefresh: true);
-    _painterListStore =
-        PainterListStore(_easyRefreshController, widget.futureGet);
     super.initState();
-    _painterListStore.fetch();
+    _easyRefreshController = EasyRefreshController(
+      controlFinishLoad: true,
+      controlFinishRefresh: true,
+    );
+    _painterListStore = PainterListStore(
+      _easyRefreshController,
+      widget.futureGet,
+    );
+    _fetch();
+  }
+
+  Future<bool> _fetch() async {
+    final success = await _painterListStore.fetch();
+    if (mounted) {
+      setState(() {
+        _loading = false;
+        if (success) _resetToken++;
+      });
+    }
+    return success;
   }
 
   @override
@@ -57,55 +79,58 @@ class _PainterListState extends State<PainterList> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.futureGet != widget.futureGet) {
       _painterListStore.source = widget.futureGet;
-      _easyRefreshController.resetFooter();
-      _painterListStore.fetch();
-      if (_painterListStore.users.isNotEmpty && _scrollController.hasClients)
-        _scrollController.jumpTo(0.0);
+      _loading = true;
+      _fetch();
     }
   }
 
   @override
   void dispose() {
-    _scrollController.dispose();
     _easyRefreshController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Observer(builder: (_) {
-      return EasyRefresh(
-        controller: _easyRefreshController,
-        header: PixezDefault.header(context),
-        onLoad: () => _painterListStore.next(),
-        onRefresh: () => _painterListStore.fetch(),
-        child: _painterListStore.users.isNotEmpty
-            ? CustomScrollView(
-                controller: _scrollController,
-                slivers: [
-                  if (widget.header != null)
-                    SliverToBoxAdapter(
-                      child: widget.header!,
+    return Column(
+      children: [
+        if (widget.header != null) widget.header!,
+        Expanded(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final columns = max(1, (constraints.maxWidth / 600).ceil());
+              return Observer(
+                builder: (_) {
+                  return SwipePagedGrid(
+                    footerTrailingSpace: widget.footerTrailingSpace,
+                    itemCount: _painterListStore.users.length,
+                    crossAxisCount: columns,
+                    rowExtent:
+                        constraints.maxWidth / columns / 3 +
+                        110 * MediaQuery.textScalerOf(context).scale(1),
+                    resetToken: _resetToken,
+                    isLoading: _loading,
+                    hasMore: () =>
+                        _painterListStore.nextUrl?.isNotEmpty == true,
+                    onLoadMore: _painterListStore.next,
+                    onRefresh: _fetch,
+                    loadingLabel: I18n.of(context).footer_loading,
+                    emptyLabel: I18n.of(context).no_more_data,
+                    retryLabel: I18n.of(context).loading_failed_retry_message,
+                    refreshLabel: I18n.of(context).refresh,
+                    itemBuilder: (context, index) => PainterCard(
+                      key: ValueKey(_painterListStore.users[index].user.id),
+                      user: _painterListStore.users[index],
+                      isNovel: widget.isNovel,
+                      paged: true,
                     ),
-                  _buildList(),
-                ],
-              )
-            : Container(),
-      );
-    });
-  }
-
-  Widget _buildList() {
-    return SliverWaterfallFlow(
-      delegate: SliverChildBuilderDelegate((context, index) {
-        final data = _painterListStore.users[index];
-        return PainterCard(
-          user: data,
-          isNovel: widget.isNovel,
-        );
-      }, childCount: _painterListStore.users.length),
-      gridDelegate: SliverWaterfallFlowDelegateWithMaxCrossAxisExtent(
-          maxCrossAxisExtent: 600),
+                  );
+                },
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 }

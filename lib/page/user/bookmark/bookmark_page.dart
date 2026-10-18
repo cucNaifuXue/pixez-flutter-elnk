@@ -17,11 +17,10 @@
 import 'dart:async';
 import 'dart:math';
 
-import 'package:easy_refresh/easy_refresh.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
 import 'package:pixez/component/illust_card.dart';
-import 'package:pixez/component/pixez_default_header.dart';
+import 'package:pixez/component/swipe_paged_grid.dart';
 import 'package:pixez/component/sort_group.dart';
 import 'package:pixez/exts.dart';
 import 'package:pixez/i18n.dart';
@@ -31,7 +30,6 @@ import 'package:pixez/main.dart';
 import 'package:pixez/network/api_client.dart';
 import 'package:pixez/page/user/bookmark/tag/user_bookmark_tag_page.dart';
 import 'package:pixez/page/user/works/works_page.dart';
-import 'package:waterfall_flow/waterfall_flow.dart';
 
 class BookmarkPage extends StatefulWidget {
   final int id;
@@ -52,13 +50,12 @@ class BookmarkPage extends StatefulWidget {
 class _BookmarkPageState extends State<BookmarkPage> {
   late LightSource futureGet;
   String restrict = 'public';
-  late ScrollController _scrollController;
   late StreamSubscription<String> subscription;
   String? currentTag;
+  int _resetToken = 0;
 
   @override
   void initState() {
-    _scrollController = ScrollController();
     restrict = widget.restrict;
     futureGet = ApiForceSource(
       futureGet: (e) => apiClient.getBookmarksIllust(widget.id, restrict, null),
@@ -66,7 +63,7 @@ class _BookmarkPageState extends State<BookmarkPage> {
     super.initState();
     subscription = topStore.topStream.listen((event) {
       if (event == "302") {
-        if (_scrollController.hasClients) _scrollController.position.jumpTo(0);
+        setState(() => _resetToken++);
       }
     });
   }
@@ -74,7 +71,6 @@ class _BookmarkPageState extends State<BookmarkPage> {
   @override
   void dispose() {
     subscription.cancel();
-    _scrollController.dispose();
     super.dispose();
   }
 
@@ -86,7 +82,8 @@ class _BookmarkPageState extends State<BookmarkPage> {
           children: [
             LightingList(
               source: futureGet,
-              scrollController: _scrollController,
+              resetToken: _resetToken,
+              footerTrailingSpace: 72,
               isNested: widget.isNested,
               header: Container(height: 45),
             ),
@@ -96,7 +93,8 @@ class _BookmarkPageState extends State<BookmarkPage> {
       }
       return LightingList(
         isNested: widget.isNested,
-        scrollController: _scrollController,
+        resetToken: _resetToken,
+        footerTrailingSpace: 72,
         source: futureGet,
       );
     } else {
@@ -147,8 +145,9 @@ class _BookmarkPageState extends State<BookmarkPage> {
                 );
                 if (result != null) {
                   String? tag = result['tag'];
-                  String restrict = result['restrict'];
+                  String selectedRestrict = result['restrict'];
                   setState(() {
+                    restrict = selectedRestrict;
                     currentTag = tag;
                     futureGet = ApiForceSource(
                       futureGet: (bool e) => apiClient.getBookmarksIllust(
@@ -204,109 +203,90 @@ class BookMarkNestedPage extends StatefulWidget {
 }
 
 class _BookMarkNestedPageState extends State<BookMarkNestedPage> {
-  late ScrollController _scrollController;
-  late EasyRefreshController _easyRefreshController;
+  int _resetToken = 0;
   late LightingStore _store;
   String restrict = 'public';
   String? currentTag;
 
   @override
   void initState() {
-    _scrollController = ScrollController();
-    _easyRefreshController = EasyRefreshController(
-      controlFinishRefresh: true,
-      controlFinishLoad: true,
-    );
     _store = widget.store;
-    _store.easyRefreshController = _easyRefreshController;
     super.initState();
     _store.fetch();
   }
 
-  @override
-  void dispose() {
-    _scrollController.dispose();
-    _easyRefreshController.dispose();
-    super.dispose();
-  }
-
   Widget _buildWorks(BuildContext context) {
+    _store.iStores.removeWhere(
+      (element) => element.illusts!.hateByUser(ai: false),
+    );
+    final itemCount = _store.iStores.length;
+    final isLoading = _store.refreshing;
+    final columns = _crossAxisCount();
+    final userIsMe =
+        accountStore.now != null &&
+        accountStore.now!.userId == widget.id.toString();
     return SafeArea(
       top: false,
-      bottom: false,
-      child: Builder(
-        builder: (BuildContext context) {
-          return EasyRefresh.builder(
-            controller: _easyRefreshController,
-            onLoad: () {
-              _store.fetchNext();
-            },
-            onRefresh: () {
-              _store.fetch(force: true);
-            },
-            header: PixezDefault.header(
-              context,
-              position: IndicatorPosition.locator,
-              safeArea: false,
+      child: CustomScrollView(
+        physics: const NeverScrollableScrollPhysics(),
+        key: PageStorageKey<String>(widget.portal),
+        slivers: [
+          SliverPinnedOverlapInjector(
+            handle: NestedScrollView.sliverOverlapAbsorberHandleFor(context),
+          ),
+          if (userIsMe)
+            SliverPersistentHeader(
+              delegate: SliverChipDelegate(
+                Center(child: buildTopChip(context)),
+              ),
+              pinned: true,
             ),
-            footer: PixezDefault.footer(
-              context,
-              position: IndicatorPosition.locator,
-            ),
-            childBuilder: (context, phy) {
-              return Observer(
-                builder: (_) {
-                  final userIsMe =
-                      accountStore.now != null &&
-                      accountStore.now!.userId == widget.id.toString();
-                  return CustomScrollView(
-                    physics: phy,
-                    key: PageStorageKey<String>(widget.portal),
-                    slivers: [
-                      userIsMe
-                          ? SliverPinnedOverlapInjector(
-                              handle:
-                                  NestedScrollView.sliverOverlapAbsorberHandleFor(
-                                    context,
-                                  ),
-                            )
-                          : SliverOverlapInjector(
-                              handle:
-                                  NestedScrollView.sliverOverlapAbsorberHandleFor(
-                                    context,
-                                  ),
-                            ),
-                      if (userIsMe)
-                        SliverPersistentHeader(
-                          delegate: SliverChipDelegate(
-                            Container(
-                              child: Center(child: buildTopChip(context)),
-                            ),
-                          ),
-                          pinned: true,
-                        ),
-                      const HeaderLocator.sliver(),
-                      if (_store.refreshing && _store.iStores.isEmpty)
-                        SliverToBoxAdapter(
-                          child: Container(
-                            height: 200,
-                            child: Center(child: CircularProgressIndicator()),
+          SliverLayoutBuilder(
+            builder: (context, constraints) {
+              // The nested viewport already excludes the expanded profile.
+              // Reserve exactly the visible area after the pinned filters.
+              final height = max(0.0, constraints.remainingPaintExtent);
+              return SliverToBoxAdapter(
+                child: SizedBox(
+                  height: height,
+                  // A very tall profile header can temporarily leave too
+                  // little space for a card. Reveal it by collapsing the header.
+                  child: height < 160
+                      ? null
+                      : SwipePagedGrid(
+                          itemCount: itemCount,
+                          crossAxisCount: columns,
+                          resetToken: _resetToken,
+                          isLoading: isLoading,
+                          hasMore: () => _store.nextUrl?.isNotEmpty == true,
+                          onLoadMore: _loadMore,
+                          onRefresh: () => _store.fetch(force: true),
+                          loadingLabel: I18n.of(context).footer_loading,
+                          emptyLabel: I18n.of(context).no_more_data,
+                          retryLabel: I18n.of(
+                            context,
+                          ).loading_failed_retry_message,
+                          refreshLabel: I18n.of(context).refresh,
+                          itemBuilder: (context, index) => IllustCard(
+                            lightingStore: _store,
+                            store: _store.iStores[index],
+                            iStores: _store.iStores,
+                            fitToCell: true,
                           ),
                         ),
-                      SliverWaterfallFlow(
-                        gridDelegate: _buildGridDelegate(),
-                        delegate: _buildSliverChildBuilderDelegate(context),
-                      ),
-                      const FooterLocator.sliver(),
-                    ],
-                  );
-                },
+                ),
               );
             },
-          );
-        },
+          ),
+        ],
       ),
     );
+  }
+
+  Future<bool> _loadMore() async {
+    final success = await _store.fetchNext();
+    if (mounted) setState(() {});
+    return success;
   }
 
   Widget _buildContent(context) {
@@ -358,35 +338,15 @@ class _BookMarkNestedPageState extends State<BookMarkNestedPage> {
     );
   }
 
-  SliverWaterfallFlowDelegate _buildGridDelegate() {
-    var count = 2;
+  int _crossAxisCount() {
     if (MediaQuery.of(context).orientation == Orientation.portrait
         ? userSetting.crossAdapt
         : userSetting.hCrossAdapt) {
-      count = _buildSliderValue();
-    } else {
-      count = (MediaQuery.of(context).orientation == Orientation.portrait)
-          ? userSetting.crossCount
-          : userSetting.hCrossCount;
+      return _buildSliderValue();
     }
-    return SliverWaterfallFlowDelegateWithFixedCrossAxisCount(
-      crossAxisCount: count,
-    );
-  }
-
-  SliverChildBuilderDelegate _buildSliverChildBuilderDelegate(
-    BuildContext context,
-  ) {
-    _store.iStores.removeWhere(
-      (element) => element.illusts!.hateByUser(ai: false),
-    );
-    return SliverChildBuilderDelegate((BuildContext context, int index) {
-      return IllustCard(
-        lightingStore: _store,
-        store: _store.iStores[index],
-        iStores: _store.iStores,
-      );
-    }, childCount: _store.iStores.length);
+    return MediaQuery.of(context).orientation == Orientation.portrait
+        ? userSetting.crossCount
+        : userSetting.hCrossCount;
   }
 
   int _buildSliderValue() {
@@ -413,6 +373,7 @@ class _BookMarkNestedPageState extends State<BookMarkNestedPage> {
             children: [I18n.of(context).public, I18n.of(context).private],
             onChange: (index) {
               if (index == 0) {
+                setState(() => _resetToken++);
                 _store.source = ApiForceSource(
                   futureGet: (bool e) => apiClient.getBookmarksIllust(
                     widget.id,
@@ -422,6 +383,7 @@ class _BookMarkNestedPageState extends State<BookMarkNestedPage> {
                 );
                 _store.fetch();
               } else if (index == 1) {
+                setState(() => _resetToken++);
                 _store.source = ApiForceSource(
                   futureGet: (bool e) => apiClient.getBookmarksIllust(
                     widget.id,
@@ -438,13 +400,17 @@ class _BookMarkNestedPageState extends State<BookMarkNestedPage> {
             child: InkWell(
               onTap: () async {
                 final result = await Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => UserBookmarkTagPage()),
+                  MaterialPageRoute(
+                    builder: (_) => UserBookmarkTagPage(currentTag: currentTag),
+                  ),
                 );
                 if (result != null) {
                   String? tag = result['tag'];
-                  String restrict = result['restrict'];
+                  String selectedRestrict = result['restrict'];
                   setState(() {
+                    restrict = selectedRestrict;
                     currentTag = tag;
+                    _resetToken++;
                     _store.source = ApiForceSource(
                       futureGet: (bool e) => apiClient.getBookmarksIllust(
                         widget.id,

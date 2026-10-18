@@ -82,6 +82,7 @@ class _FollowListState extends State<FollowList> {
     return Stack(
       children: <Widget>[
         PainterList(
+          footerTrailingSpace: 72,
           futureGet: futureGet,
           isNovel: _isNovel,
           header: Container(

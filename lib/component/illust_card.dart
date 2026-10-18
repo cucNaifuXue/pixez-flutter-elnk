@@ -41,12 +41,14 @@ class IllustCard extends StatefulWidget {
   final List<IllustStore>? iStores;
   final bool needToBan;
   final LightingStore lightingStore;
+  final bool fitToCell;
 
   IllustCard({
     required this.store,
     required this.lightingStore,
     this.iStores,
     this.needToBan = false,
+    this.fitToCell = false,
   });
 
   @override
@@ -180,7 +182,7 @@ class _IllustCardState extends State<IllustCard> {
     final quality = IllustQualityExtension.fromValue(
       userSetting.feedPreviewQuality,
     );
-    return tooLong
+    return tooLong && !widget.fitToCell
         ? NullHero(
             tag: tag,
             child: PixivImage(
@@ -192,7 +194,11 @@ class _IllustCardState extends State<IllustCard> {
             tag: tag,
             child: PixivImage(
               url,
-              fit: BoxFit.fitWidth,
+              fit: widget.fitToCell ? BoxFit.contain : BoxFit.fitWidth,
+              fade: !widget.fitToCell,
+              placeWidget: widget.fitToCell
+                  ? Center(child: Text(I18n.of(context).footer_loading))
+                  : null,
               cacheHeaderData: PixEzCacheHeaderData(key: tag, quality: quality),
             ),
           );
@@ -212,34 +218,13 @@ class _IllustCardState extends State<IllustCard> {
         context,
         Column(
           children: <Widget>[
-            AspectRatio(
-              aspectRatio: radio,
-              child: Stack(
-                children: [
-                  Positioned.fill(child: _buildPic(tag, tooLong)),
-                  Positioned(
-                    top: 5.0,
-                    right: 5.0,
-                    child: Row(
-                      children: [
-                        if (userSetting.feedAIBadge &&
-                            store.illusts!.illustAIType == 2)
-                          _buildAIBadge(),
-                        _buildVisibility(),
-                      ],
-                    ),
-                  ),
-                  // Positioned(
-                  //   top: 0,
-                  //   left: 0,
-                  //   child: CustomPaint(
-                  //     size: Size(36, 36),
-                  //     painter: TrianglePainter(),
-                  //   ),
-                  // ),
-                ],
+            if (widget.fitToCell)
+              Expanded(child: _buildImageArea(tooLong))
+            else
+              AspectRatio(
+                aspectRatio: radio,
+                child: _buildImageArea(tooLong),
               ),
-            ),
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -260,6 +245,8 @@ class _IllustCardState extends State<IllustCard> {
                       alignment: Alignment.centerLeft,
                       child: Text(
                         '${store.illusts?.series?.title ?? ''}',
+                        maxLines: widget.fitToCell ? 1 : null,
+                        overflow: widget.fitToCell ? TextOverflow.ellipsis : null,
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
                     ),
@@ -270,6 +257,25 @@ class _IllustCardState extends State<IllustCard> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildImageArea(bool tooLong) {
+    return Stack(
+      children: [
+        Positioned.fill(child: _buildPic(tag, tooLong)),
+        Positioned(
+          top: 5.0,
+          right: 5.0,
+          child: Row(
+            children: [
+              if (userSetting.feedAIBadge && store.illusts!.illustAIType == 2)
+                _buildAIBadge(),
+              _buildVisibility(),
+            ],
+          ),
+        ),
+      ],
     );
   }
 

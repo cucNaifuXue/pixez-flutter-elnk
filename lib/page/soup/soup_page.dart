@@ -14,11 +14,16 @@
  *
  */
 
+import 'dart:math';
+
+import 'package:flutter/rendering.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
 import 'package:pixez/component/null_hero.dart';
 import 'package:pixez/component/painter_avatar.dart';
 import 'package:pixez/component/pixiv_image.dart';
+import 'package:pixez/component/swipe_paged_grid.dart';
+import 'package:pixez/i18n.dart';
 import 'package:pixez/models/amwork.dart';
 import 'package:pixez/models/spotlight_response.dart';
 import 'package:pixez/page/picture/illust_lighting_page.dart';
@@ -32,7 +37,7 @@ class SoupPage extends StatefulWidget {
   final String? heroTag;
 
   SoupPage({Key? key, required this.url, required this.spotlight, this.heroTag})
-      : super(key: key);
+    : super(key: key);
 
   @override
   _SoupPageState createState() => _SoupPageState();
@@ -40,108 +45,198 @@ class SoupPage extends StatefulWidget {
 
 class _SoupPageState extends State<SoupPage> {
   final SoupStore _soupStore = SoupStore();
+  final ScrollController _scrollController = ScrollController();
+  final GlobalKey _gridKey = GlobalKey();
+  bool _loading = true;
+  bool _failed = false;
+  int _resetToken = 0;
 
   @override
   void initState() {
-    _soupStore.fetch(widget.url);
     super.initState();
+    _refresh();
+  }
+
+  Future<bool> _refresh() async {
+    final success = await _soupStore.fetch(widget.url);
+    if (mounted) {
+      setState(() {
+        _loading = false;
+        _failed = !success;
+        if (success) _resetToken++;
+      });
+    }
+    return success;
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _alignGrid() {
+    final target = _gridKey.currentContext?.findRenderObject();
+    if (target == null || !_scrollController.hasClients) return;
+    final viewport = RenderAbstractViewport.maybeOf(target);
+    if (viewport == null) return;
+    final pinnedHeight = kToolbarHeight + MediaQuery.paddingOf(context).top;
+    final offset = viewport.getOffsetToReveal(target, 0).offset - pinnedHeight;
+    final position = _scrollController.position;
+    _scrollController.jumpTo(
+      offset
+          .clamp(position.minScrollExtent, position.maxScrollExtent)
+          .toDouble(),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Observer(builder: (context) {
-        return NestedScrollView(
-          body: buildBlocProvider(),
-          headerSliverBuilder: (BuildContext context, bool innerBoxIsScrolled) {
-            return [
-              if (widget.spotlight != null)
-                SliverAppBar(
-                  pinned: true,
-                  expandedHeight: 200.0,
-                  flexibleSpace: FlexibleSpaceBar(
-                    centerTitle: true,
-                    title: Text(widget.spotlight!.pureTitle),
-                    background: NullHero(
-                      tag: widget.heroTag,
-                      child: PixivImage(
-                        widget.spotlight!.thumbnail,
-                        fit: BoxFit.cover,
-                        height: 200,
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final pinnedHeight =
+              kToolbarHeight + MediaQuery.paddingOf(context).top;
+          final gridHeight = max(48.0, constraints.maxHeight - pinnedHeight);
+          return Observer(
+            builder: (context) {
+              return CustomScrollView(
+                controller: _scrollController,
+                slivers: [
+                  SliverAppBar(
+                    pinned: true,
+                    expandedHeight: widget.spotlight == null ? null : 200,
+                    flexibleSpace: widget.spotlight == null
+                        ? null
+                        : FlexibleSpaceBar(
+                            centerTitle: true,
+                            title: Text(
+                              widget.spotlight!.pureTitle,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            background: NullHero(
+                              tag: widget.heroTag,
+                              child: PixivImage(
+                                widget.spotlight!.thumbnail,
+                                fit: BoxFit.cover,
+                                height: 200,
+                                fade: false,
+                              ),
+                            ),
+                          ),
+                    actions: [
+                      IconButton(
+                        tooltip: MaterialLocalizations.of(
+                          context,
+                        ).firstPageTooltip,
+                        icon: const Icon(Icons.vertical_align_top),
+                        onPressed: () {
+                          if (_scrollController.hasClients) {
+                            _scrollController.jumpTo(
+                              _scrollController.position.minScrollExtent,
+                            );
+                          }
+                        },
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.share),
+                        onPressed: () => launchUrlString(
+                          widget.spotlight?.articleUrl ?? widget.url,
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (_soupStore.description?.isNotEmpty == true)
+                    SliverToBoxAdapter(
+                      child: Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(8),
+                          child: Text(_soupStore.description!),
+                        ),
+                      ),
+                    ),
+                  SliverToBoxAdapter(
+                    child: SizedBox(
+                      key: _gridKey,
+                      height: gridHeight,
+                      child: SafeArea(
+                        top: false,
+                        child: SwipePagedGrid(
+                          itemCount: _soupStore.amWorks.length,
+                          crossAxisCount: 1,
+                          resetToken: _resetToken,
+                          isLoading: _loading,
+                          hasMore: () => false,
+                          onLoadMore: () async => true,
+                          onRefresh: _refresh,
+                          onInteractionStart: _alignGrid,
+                          loadingLabel: I18n.of(context).footer_loading,
+                          emptyLabel: _failed
+                              ? I18n.of(context).loading_failed_retry_message
+                              : I18n.of(context).no_more_data,
+                          retryLabel: I18n.of(
+                            context,
+                          ).loading_failed_retry_message,
+                          refreshLabel: I18n.of(context).refresh,
+                          itemBuilder: (context, index) =>
+                              _buildWork(_soupStore.amWorks[index]),
+                        ),
                       ),
                     ),
                   ),
-                  actions: <Widget>[
-                    IconButton(
-                      icon: Icon(Icons.share),
-                      onPressed: () async {
-                        var url = widget.spotlight!.articleUrl;
-                        await launchUrlString(url);
-                      },
-                    )
-                  ],
-                )
-              else
-                SliverAppBar()
-            ];
-          },
-        );
-      }),
+                ],
+              );
+            },
+          );
+        },
+      ),
     );
   }
 
-  Widget buildBlocProvider() {
-    if (_soupStore.amWorks.isEmpty) return Container();
-    return ListView.builder(
-      itemBuilder: (BuildContext context, int index) {
-        return Builder(builder: (context) {
-          if (index == 0) {
-            if (_soupStore.description == null ||
-                _soupStore.description!.isEmpty)
-              return Container(
-                height: 1,
-              );
-            return Card(
-              child: Padding(
-                padding: const EdgeInsets.all(8.0),
-                child: Text(_soupStore.description ?? ''),
+  Widget _buildWork(AmWork amWork) {
+    return InkWell(
+      onTap: () {
+        final id = int.parse(Uri.parse(amWork.arworkLink!).pathSegments.last);
+        Navigator.of(context, rootNavigator: true).push(
+          MaterialPageRoute(
+            builder: (context) =>
+                IllustLightingPage(id: id, store: IllustStore(id, null)),
+          ),
+        );
+      },
+      child: Card(
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          children: [
+            ListTile(
+              leading: PainterAvatar(
+                url: amWork.userImage!,
+                id: int.parse(Uri.parse(amWork.userLink!).pathSegments.last),
               ),
-            );
-          }
-          AmWork amWork = _soupStore.amWorks[index - 1];
-          return InkWell(
-            onTap: () {
-              int id = int.parse(Uri.parse(amWork.arworkLink!).pathSegments[
-                  Uri.parse(amWork.arworkLink!).pathSegments.length - 1]);
-              Navigator.of(context, rootNavigator: true)
-                  .push(MaterialPageRoute(builder: (BuildContext context) {
-                return IllustLightingPage(
-                  id: id,
-                  store: IllustStore(id, null),
-                );
-              }));
-            },
-            child: Card(
-              clipBehavior: Clip.antiAlias,
-              child: Column(
-                children: <Widget>[
-                  ListTile(
-                    leading: PainterAvatar(
-                      url: amWork.userImage!,
-                      id: int.parse(Uri.parse(amWork.userLink!).pathSegments[
-                          Uri.parse(amWork.userLink!).pathSegments.length - 1]),
-                    ),
-                    title: Text(amWork.title!),
-                    subtitle: Text(amWork.user!),
-                  ),
-                  PixivImage(amWork.showImage!),
-                ],
+              title: Text(
+                amWork.title ?? '',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              subtitle: Text(
+                amWork.user ?? '',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
-          );
-        });
-      },
-      itemCount: _soupStore.amWorks.length + 1,
+            Expanded(
+              child: PixivImage(
+                amWork.showImage!,
+                fit: BoxFit.contain,
+                fade: false,
+                width: double.infinity,
+                height: double.infinity,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

@@ -28,7 +28,7 @@ class WatchlistStore extends _$WatchlistStore {
     return const WatchlistState();
   }
 
-  Future<void> fetch() async {
+  Future<bool> fetch() async {
     state = state.copyWith(isLoading: true);
     try {
       final response = await apiClient.watchListManga();
@@ -37,20 +37,27 @@ class WatchlistStore extends _$WatchlistStore {
       controller.finishRefresh(
         nextUrl != null ? IndicatorResult.success : IndicatorResult.noMore,
       );
-      state = state.copyWith(mangaSeries: data.series, isLoading: false);
+      state = state.copyWith(
+        model: data,
+        mangaSeries: data.series,
+        isLoading: false,
+        errorMessage: null,
+      );
+      return true;
     } catch (e) {
       controller.finishRefresh(IndicatorResult.fail);
       state = state.copyWith(errorMessage: e.toString(), isLoading: false);
+      return false;
     }
   }
 
   // load more
-  Future<void> loadMore() async {
+  Future<bool> loadMore() async {
     try {
       var nextUrl = state.model?.nextUrl;
       if (nextUrl == null) {
         controller.finishLoad(IndicatorResult.noMore);
-        return;
+        return true;
       }
       final response = await apiClient.getNext(nextUrl);
       final data = WatchlistMangaModel.fromJson(response.data);
@@ -58,14 +65,17 @@ class WatchlistStore extends _$WatchlistStore {
         model: data,
         mangaSeries: [...state.mangaSeries, ...data.series],
         isLoading: false,
+        errorMessage: null,
       );
       nextUrl = data.nextUrl;
       controller.finishLoad(
         nextUrl != null ? IndicatorResult.success : IndicatorResult.noMore,
       );
+      return true;
     } catch (e) {
       controller.finishLoad(IndicatorResult.fail);
       state = state.copyWith(errorMessage: e.toString(), isLoading: false);
+      return false;
     }
   }
 }

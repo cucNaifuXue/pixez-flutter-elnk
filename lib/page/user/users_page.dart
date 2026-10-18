@@ -335,11 +335,7 @@ class _UsersPageState extends State<UsersPage> with TickerProviderStateMixin {
                 HapticUtil.selectionClick();
                 if (_tabController.index == index &&
                     _scrollController.hasClients) {
-                  _scrollController.animateTo(
-                    0,
-                    duration: const Duration(milliseconds: 300),
-                    curve: Curves.easeOut,
-                  );
+                  _scrollController.jumpTo(0);
                 }
               },
               tabs: [

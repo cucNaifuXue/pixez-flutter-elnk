@@ -16,82 +16,89 @@
 
 import 'dart:math';
 
-import 'package:easy_refresh/easy_refresh.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
-import 'package:pixez/component/pixez_default_header.dart';
 import 'package:pixez/component/spotlight_card.dart';
+import 'package:pixez/component/swipe_paged_grid.dart';
 import 'package:pixez/i18n.dart';
 import 'package:pixez/main.dart';
 import 'package:pixez/page/hello/recom/spotlight_store.dart';
-import 'package:waterfall_flow/waterfall_flow.dart';
 
-class SpotLightPage extends StatelessWidget {
+class SpotLightPage extends StatefulWidget {
   @override
-  Widget build(BuildContext context) {
-    final ScrollController _controller = ScrollController();
-    final EasyRefreshController _refreshController = EasyRefreshController(
-        controlFinishLoad: true, controlFinishRefresh: true);
-    final SpotlightStore _spotlightStore = SpotlightStore(_refreshController);
-    return Observer(builder: (_) {
-      return Scaffold(
-        appBar: AppBar(
-          title: Text(I18n.of(context).spotlight),
-          actions: <Widget>[
-            IconButton(
-              icon: Icon(Icons.arrow_upward),
-              onPressed: () {
-                _controller.animateTo(0,
-                    duration: Duration(seconds: 1), curve: Curves.ease);
-              },
-            )
-          ],
-        ),
-        body: EasyRefresh(
-            onLoad: () => _spotlightStore.next(),
-            onRefresh: () => _spotlightStore.fetch(),
-            header: PixezDefault.header(context),
-            refreshOnStart: true,
-            controller: _refreshController,
-            child: WaterfallFlow.builder(
-              gridDelegate: _buildGridDelegate(context),
-              controller: _controller,
-              itemBuilder: (BuildContext context, int index) {
-                return SpotlightCard(
-                    spotlight: _spotlightStore.articles[index]);
-              },
-              itemCount: _spotlightStore.articles.length,
-            )),
-      );
-    });
+  State<SpotLightPage> createState() => _SpotLightPageState();
+}
+
+class _SpotLightPageState extends State<SpotLightPage> {
+  final SpotlightStore _spotlightStore = SpotlightStore(null);
+  bool _loading = true;
+  int _resetToken = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _refresh();
   }
 
-  SliverWaterfallFlowDelegate _buildGridDelegate(BuildContext context) {
-    var count = 2;
-    if (MediaQuery.of(context).orientation == Orientation.portrait
-        ? userSetting.crossAdapt
-        : userSetting.hCrossAdapt) {
-      count = _buildSliderValue(context);
-    } else {
-      count = (MediaQuery.of(context).orientation == Orientation.portrait)
-          ? userSetting.crossCount
-          : userSetting.hCrossCount;
+  Future<bool> _refresh() async {
+    final success = await _spotlightStore.fetch();
+    if (mounted) {
+      setState(() {
+        _loading = false;
+        if (success) _resetToken++;
+      });
     }
-    return SliverWaterfallFlowDelegateWithFixedCrossAxisCount(
-      crossAxisCount: count,
+    return success;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text(I18n.of(context).spotlight)),
+      body: Observer(
+        builder: (_) {
+          return SwipePagedGrid(
+            itemCount: _spotlightStore.articles.length,
+            crossAxisCount: _crossAxisCount(context),
+            rowExtent: 238,
+            isLoading: _loading,
+            resetToken: _resetToken,
+            hasMore: () => _spotlightStore.nextUrl?.isNotEmpty == true,
+            onLoadMore: _spotlightStore.next,
+            onRefresh: _refresh,
+            loadingLabel: I18n.of(context).footer_loading,
+            emptyLabel: I18n.of(context).no_more_data,
+            retryLabel: I18n.of(context).loading_failed_retry_message,
+            refreshLabel: I18n.of(context).refresh,
+            itemBuilder: (context, index) => Center(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: SizedBox(
+                  width: 180,
+                  height: 238,
+                  child: SpotlightCard(
+                    spotlight: _spotlightStore.articles[index],
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
+      ),
     );
   }
 
-  int _buildSliderValue(BuildContext context) {
-    final currentValue =
-        (MediaQuery.of(context).orientation == Orientation.portrait
-                ? userSetting.crossAdapterWidth
-                : userSetting.hCrossAdapterWidth)
-            .toDouble();
-    var nowAdaptWidth = max(currentValue, 50.0);
-    nowAdaptWidth = min(nowAdaptWidth, 2160.0);
-    final screenWidth = MediaQuery.of(context).size.width;
-    final result = max(screenWidth / nowAdaptWidth, 1.0).toInt();
-    return result;
+  int _crossAxisCount(BuildContext context) {
+    final portrait = MediaQuery.of(context).orientation == Orientation.portrait;
+    if (portrait ? userSetting.crossAdapt : userSetting.hCrossAdapt) {
+      final width =
+          (portrait
+                  ? userSetting.crossAdapterWidth
+                  : userSetting.hCrossAdapterWidth)
+              .toDouble()
+              .clamp(50.0, 2160.0);
+      return max(1, (MediaQuery.of(context).size.width / width).floor());
+    }
+    return portrait ? userSetting.crossCount : userSetting.hCrossCount;
   }
 }

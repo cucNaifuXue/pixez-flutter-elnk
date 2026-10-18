@@ -14,7 +14,6 @@
  *
  */
 
-import 'package:easy_refresh/easy_refresh.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
 import 'package:pixez/component/painter_avatar.dart';
@@ -24,7 +23,7 @@ import 'package:pixez/lighting/lighting_store.dart';
 import 'package:pixez/models/illust.dart';
 import 'package:pixez/network/api_client.dart';
 import 'package:pixez/page/login/login_page.dart';
-import 'package:waterfall_flow/waterfall_flow.dart';
+import 'package:pixez/component/swipe_paged_grid.dart';
 
 class GoToLoginPage extends StatelessWidget {
   final Illusts illust;
@@ -34,9 +33,7 @@ class GoToLoginPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(illust.title),
-      ),
+      appBar: AppBar(title: Text(illust.title)),
       body: SafeArea(
         child: SingleChildScrollView(
           child: Column(
@@ -64,9 +61,9 @@ class GoToLoginPage extends StatelessWidget {
                       ),
                       Text(illust.createDate),
                     ],
-                  )
+                  ),
                 ],
-              )
+              ),
             ],
           ),
         ),
@@ -83,26 +80,26 @@ class LoginInFirst extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.center,
         mainAxisAlignment: MainAxisAlignment.center,
         children: <Widget>[
+          Center(child: Text('>_<', style: TextStyle(fontSize: 26))),
           Center(
-            child: Text(
-              '>_<',
-              style: TextStyle(fontSize: 26),
+            child: Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: Text(I18n.of(context).login_message),
             ),
           ),
-          Center(
-              child: Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: Text(I18n.of(context).login_message),
-          )),
           ElevatedButton(
             child: Text(I18n.of(context).go_to_login),
             onPressed: () {
-              Navigator.push(context,
-                  MaterialPageRoute(builder: (BuildContext context) {
-                return LoginPage();
-              }));
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (BuildContext context) {
+                    return LoginPage();
+                  },
+                ),
+              );
             },
-          )
+          ),
         ],
       ),
     );
@@ -116,57 +113,63 @@ class PreviewPage extends StatefulWidget {
 
 class _PreviewPageState extends State<PreviewPage> {
   late LightingStore _lightingStore;
-  EasyRefreshController _easyRefreshController = EasyRefreshController(
-      controlFinishLoad: true, controlFinishRefresh: true);
 
   @override
   void initState() {
     _lightingStore = LightingStore(
       ApiSource(futureGet: () => apiClient.walkthroughIllusts()),
     );
-    _lightingStore.easyRefreshController = _easyRefreshController;
     super.initState();
     _lightingStore.fetch();
   }
 
   @override
   void dispose() {
-    _easyRefreshController.dispose();
+    _lightingStore.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Observer(builder: (_) {
-      return SafeArea(
-        child: EasyRefresh(
-          controller: _easyRefreshController,
-          onRefresh: () => _lightingStore.fetch(url: "walkthrough"),
-          onLoad: () => _lightingStore.fetchNext(),
-          child: WaterfallFlow.builder(
-            shrinkWrap: true,
-            gridDelegate: SliverWaterfallFlowDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-            ),
+    return Observer(
+      builder: (_) {
+        return SafeArea(
+          child: SwipePagedGrid(
+            crossAxisCount: 2,
+            isLoading: _lightingStore.refreshing,
+            hasMore: () => _lightingStore.nextUrl?.isNotEmpty == true,
+            onRefresh: () => _lightingStore.fetch(url: "walkthrough"),
+            onLoadMore: _lightingStore.fetchNext,
+            loadingLabel: I18n.of(context).footer_loading,
+            emptyLabel: I18n.of(context).no_more_data,
+            retryLabel: I18n.of(context).loading_failed_retry_message,
+            refreshLabel: I18n.of(context).refresh,
             itemBuilder: (BuildContext context, int index) {
               return InkWell(
                 onTap: () {
-                  Navigator.of(context).push(MaterialPageRoute(
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
                       builder: (BuildContext context) => GoToLoginPage(
-                          illust: _lightingStore.iStores[index].illusts!)));
+                        illust: _lightingStore.iStores[index].illusts!,
+                      ),
+                    ),
+                  );
                 },
                 child: Card(
                   child: Container(
-                    child: PixivImage(_lightingStore
-                        .iStores[index].illusts!.imageUrls.squareMedium),
+                    child: PixivImage(
+                      _lightingStore.iStores[index].illusts!.imageUrls.medium,
+                      fit: BoxFit.contain,
+                      fade: false,
+                    ),
                   ),
                 ),
               );
             },
             itemCount: _lightingStore.iStores.length,
           ),
-        ),
-      );
-    });
+        );
+      },
+    );
   }
 }

@@ -118,7 +118,9 @@ class _NewPageState extends State<NewPage>
               ],
             ),
             Expanded(
-              child: TabBarView(
+              child: SafeArea(
+                top: false,
+                child: TabBarView(
                 controller: _tabController,
                 children: <Widget>[
                   NewIllustPage(),
@@ -131,6 +133,7 @@ class _NewPageState extends State<NewPage>
                     id: int.parse(accountStore.now!.userId),
                   ),
                 ],
+                ),
               ),
             )
           ],

@@ -1,4 +1,3 @@
-
 import 'package:easy_refresh/easy_refresh.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:pixez/models/illust_series_with_id_model.dart';
@@ -23,7 +22,9 @@ abstract class IllustSeriesState with _$IllustSeriesState {
 @riverpod
 class IllustSeriesStore extends _$IllustSeriesStore {
   EasyRefreshController controller = EasyRefreshController(
-      controlFinishLoad: true, controlFinishRefresh: true);
+    controlFinishLoad: true,
+    controlFinishRefresh: true,
+  );
   late int id;
   @override
   IllustSeriesState build(int id) {
@@ -31,49 +32,63 @@ class IllustSeriesStore extends _$IllustSeriesStore {
     return IllustSeriesState();
   }
 
-  Future<void> fetch() async {
+  Future<bool> fetch() async {
     try {
       state = state.copyWith(isLoading: true);
       final response = await apiClient.illustSeries(id);
       final model = IllustSeriesWithIdModel.fromJson(response.data);
       final nextUrl = model.nextUrl;
       controller.finishRefresh(
-          nextUrl != null ? IndicatorResult.success : IndicatorResult.noMore);
+        nextUrl != null ? IndicatorResult.success : IndicatorResult.noMore,
+      );
       state = state.copyWith(
-          isLoading: false,
-          model: model,
-          watchlistAdded: model.illustSeriesDetail?.watchlistAdded ?? false,
-          illusts: [...model.illusts?.map((e) => IllustStore(e.id, e)) ?? []],
-          errorMessage: null);
+        isLoading: false,
+        model: model,
+        watchlistAdded: model.illustSeriesDetail?.watchlistAdded ?? false,
+        illusts: [...model.illusts?.map((e) => IllustStore(e.id, e)) ?? []],
+        errorMessage: null,
+      );
+      return true;
     } catch (e) {
       controller.finishRefresh(IndicatorResult.fail);
       state = state.copyWith(
-          isLoading: false, errorMessage: e.toString(), watchlistAdded: false);
+        isLoading: false,
+        errorMessage: e.toString(),
+        watchlistAdded: false,
+      );
+      return false;
     }
   }
 
   // loadmore
-  Future<void> loadMore() async {
+  Future<bool> loadMore() async {
     try {
       final nextUrl = state.model?.nextUrl;
       if (nextUrl == null) {
         controller.finishLoad(IndicatorResult.noMore);
-        return;
+        return true;
       }
       final response = await apiClient.getNext(nextUrl);
       final model = IllustSeriesWithIdModel.fromJson(response.data);
-      controller.finishLoad(state.model?.nextUrl != null
-          ? IndicatorResult.success
-          : IndicatorResult.noMore);
+      model.illustSeriesDetail ??= state.model?.illustSeriesDetail;
+      model.illustSeriesFirstIllust ??= state.model?.illustSeriesFirstIllust;
+      controller.finishLoad(
+        model.nextUrl != null
+            ? IndicatorResult.success
+            : IndicatorResult.noMore,
+      );
       state = state.copyWith(
-          model: model,
-          illusts: [
-            ...state.illusts,
-            ...model.illusts?.map((e) => IllustStore(e.id, e)) ?? []
-          ],
-          errorMessage: null);
+        model: model,
+        illusts: [
+          ...state.illusts,
+          ...model.illusts?.map((e) => IllustStore(e.id, e)) ?? [],
+        ],
+        errorMessage: null,
+      );
+      return true;
     } catch (e) {
       controller.finishLoad(IndicatorResult.fail);
+      return false;
     }
   }
 

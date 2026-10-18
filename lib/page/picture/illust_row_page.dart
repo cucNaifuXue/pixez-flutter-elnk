@@ -15,7 +15,6 @@
  */
 
 import 'package:bot_toast/bot_toast.dart';
-import 'package:easy_refresh/easy_refresh.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
@@ -33,10 +32,11 @@ import 'package:pixez/main.dart';
 import 'package:pixez/models/ban_illust_id.dart';
 import 'package:pixez/models/ban_tag.dart';
 import 'package:pixez/models/illust.dart';
-import 'package:pixez/page/picture/illust_about_store.dart';
+import 'package:pixez/lighting/lighting_store.dart';
+import 'package:pixez/network/api_client.dart';
+import 'package:pixez/page/picture/illust_related_grid.dart';
 import 'package:pixez/page/picture/illust_detail_content.dart';
 import 'package:pixez/page/picture/illust_store.dart';
-import 'package:pixez/page/picture/picture_list_page.dart';
 import 'package:pixez/page/picture/tag_for_illust_page.dart';
 import 'package:pixez/page/picture/ugoira_loader.dart';
 import 'package:pixez/page/search/result_page.dart';
@@ -68,30 +68,29 @@ class _IllustRowPageState extends State<IllustRowPage>
     with AutomaticKeepAliveClientMixin {
   UserStore? userStore;
   late IllustStore _illustStore;
-  late IllustAboutStore _aboutStore;
+  late LightingStore _aboutStore;
   late ScrollController _scrollController;
-  late EasyRefreshController _refreshController;
   bool tempView = false;
   @override
   void initState() {
-    _refreshController = EasyRefreshController(
-      controlFinishLoad: true,
-      controlFinishRefresh: true,
-    );
     _scrollController = ScrollController();
     _illustStore = widget.store ?? IllustStore(widget.id, null);
     _illustStore.fetch();
-    _aboutStore = IllustAboutStore(widget.id, _refreshController);
+    _aboutStore = LightingStore(
+      ApiSource(futureGet: () => apiClient.getIllustRelated(widget.id)),
+    )..fetch();
     super.initState();
   }
 
   @override
   void didUpdateWidget(covariant IllustRowPage oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.store != widget.store) {
+    if (oldWidget.id != widget.id || oldWidget.store != widget.store) {
       _illustStore = widget.store ?? IllustStore(widget.id, null);
       _illustStore.fetch();
-      _aboutStore = IllustAboutStore(widget.id, _refreshController);
+      _aboutStore = LightingStore(
+        ApiSource(futureGet: () => apiClient.getIllustRelated(widget.id)),
+      )..fetch();
       LPrinter.d("state change");
     }
   }
@@ -99,9 +98,9 @@ class _IllustRowPageState extends State<IllustRowPage>
   void _loadAbout() {
     if (mounted &&
         _scrollController.hasClients &&
-        _aboutStore.illusts.isEmpty &&
-        !_aboutStore.fetching)
-      _aboutStore.next();
+        _aboutStore.iStores.isEmpty &&
+        !_aboutStore.refreshing)
+      _aboutStore.fetch();
   }
 
   Future<void> _autoBookmarkAfterSave(Illusts illust) async {
@@ -116,10 +115,10 @@ class _IllustRowPageState extends State<IllustRowPage>
         restrict: userSetting.defaultPrivateLike ? "private" : "public",
       );
       try {
-        final targetIllust = _aboutStore.illusts.firstWhere(
+        final targetIllust = _aboutStore.iStores.firstWhere(
           (e) => e.id == illust.id,
         );
-        targetIllust.isBookmarked = true;
+        targetIllust.illusts!.isBookmarked = true;
         if (mounted) {
           setState(() {});
         }
@@ -131,7 +130,7 @@ class _IllustRowPageState extends State<IllustRowPage>
   void dispose() {
     _illustStore.dispose();
     _scrollController.dispose();
-    _refreshController.dispose();
+    _aboutStore.dispose();
     super.dispose();
   }
 
@@ -333,32 +332,33 @@ class _IllustRowPageState extends State<IllustRowPage>
                     Expanded(
                       child: Container(
                         color: Theme.of(context).cardColor,
-                        child: EasyRefresh(
-                          controller: _refreshController,
-                          onLoad: () {
-                            _aboutStore.next();
-                          },
-                          child: CustomScrollView(
-                            controller: _scrollController,
-                            slivers: [
-                              SliverToBoxAdapter(
-                                child: Container(
-                                  height: MediaQuery.of(context).padding.top,
-                                ),
+                        child: CustomScrollView(
+                          controller: _scrollController,
+                          slivers: [
+                            SliverToBoxAdapter(
+                              child: Container(
+                                height: MediaQuery.of(context).padding.top,
                               ),
-                              SliverToBoxAdapter(
-                                child: IllustDetailContent(
-                                  illusts: data,
-                                  userStore: userStore,
-                                  illustStore: _illustStore,
-                                  loadAbout: () {
-                                    _loadAbout();
-                                  },
-                                ),
+                            ),
+                            SliverToBoxAdapter(
+                              child: IllustDetailContent(
+                                illusts: data,
+                                userStore: userStore,
+                                illustStore: _illustStore,
+                                loadAbout: _loadAbout,
                               ),
-                              _buildRecom(),
-                            ],
-                          ),
+                            ),
+                            SliverToBoxAdapter(
+                              child: IllustRelatedGrid(
+                                key: ValueKey(widget.id),
+                                store: _aboutStore,
+                                scrollController: _scrollController,
+                                onShowDetails: () {
+                                  _scrollController.jumpTo(0);
+                                },
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),
@@ -382,42 +382,6 @@ class _IllustRowPageState extends State<IllustRowPage>
             ),
           );
         },
-      ),
-    );
-  }
-
-  SliverGrid _buildRecom() {
-    return SliverGrid(
-      delegate: SliverChildBuilderDelegate((BuildContext context, int index) {
-        var list = _aboutStore.illusts
-            .map((element) => IllustStore(element.id, element))
-            .toList();
-        return InkWell(
-          onTap: () {
-            HapticUtil.selectionClick();
-            Leader.push(
-              context,
-              PictureListPage(
-                iStores: list,
-                lightingStore: null,
-                store: list[index],
-              ),
-            );
-          },
-          onLongPress: () async {
-            HapticUtil.heavy();
-            final illust = _aboutStore.illusts[index];
-            saveStore.saveImage(illust);
-            await _autoBookmarkAfterSave(illust);
-          },
-          child: PixivImage(
-            _aboutStore.illusts[index].imageUrls.squareMedium,
-            enableMemoryCache: false,
-          ),
-        );
-      }, childCount: _aboutStore.illusts.length),
-      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3,
       ),
     );
   }

@@ -15,26 +15,22 @@
  */
 
 import 'dart:async';
-import 'dart:io';
 import 'dart:math';
 
-import 'package:easy_refresh/easy_refresh.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
 import 'package:pixez/component/illust_card.dart';
-import 'package:pixez/component/pixez_default_header.dart';
 import 'package:pixez/component/pixiv_image.dart';
+import 'package:pixez/component/swipe_paged_grid.dart';
 import 'package:pixez/exts.dart';
 import 'package:pixez/i18n.dart';
 import 'package:pixez/lighting/lighting_store.dart';
 import 'package:pixez/main.dart';
 import 'package:pixez/network/api_client.dart';
 import 'package:pixez/page/hello/recom/recom_user_road.dart';
-import 'package:pixez/page/hello/recom/recom_user_store.dart';
 import 'package:pixez/page/hello/recom/spotlight_store.dart';
 import 'package:pixez/page/soup/soup_page.dart';
 import 'package:pixez/page/spotlight/spotlight_page.dart';
-import 'package:waterfall_flow/waterfall_flow.dart';
 
 class RecomSpolightPage extends StatefulWidget {
   RecomSpolightPage({Key? key}) : super(key: key);
@@ -47,120 +43,103 @@ class _RecomSpolightPageState extends State<RecomSpolightPage>
     with AutomaticKeepAliveClientMixin {
   late SpotlightStore spotlightStore;
   late LightingStore _lightingStore;
-  late RecomUserStore _recomUserStore;
   late StreamSubscription<String> subscription;
-  late EasyRefreshController _easyRefreshController;
-  late ScrollController _scrollController;
+  int _resetToken = 0;
 
   @override
   void dispose() {
     subscription.cancel();
-    _scrollController.dispose();
-    _easyRefreshController.dispose();
+    _lightingStore.dispose();
     super.dispose();
   }
 
   @override
   void initState() {
-    _scrollController = ScrollController();
-    _easyRefreshController = EasyRefreshController(
-        controlFinishLoad: true, controlFinishRefresh: true);
-    _recomUserStore = RecomUserStore(_easyRefreshController);
     spotlightStore = SpotlightStore(null);
     _lightingStore = LightingStore(
       ApiForceSource(
           futureGet: (e) => apiClient.getRecommend(), glanceKey: "recom"),
-    )..easyRefreshController = _easyRefreshController;
+    );
     super.initState();
     subscription = topStore.topStream.listen((event) {
       if (event == "100") {
-        _scrollController.position.jumpTo(0);
+        setState(() => _resetToken++);
       }
     });
+    unawaited(spotlightStore.fetch());
+    unawaited(_lightingStore.fetch());
   }
 
-  Future<void> fetchT() async {
-    await spotlightStore.fetch();
-    _lightingStore.fetch();
-    _recomUserStore.fetch();
+  Future<bool> _refresh() async {
+    final results = await Future.wait([
+      spotlightStore.fetch(),
+      _lightingStore.fetch(force: true),
+    ]);
+    return results[1];
   }
 
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    return buildEasyRefresh(context);
-  }
-
-  bool backToTopVisible = false;
-
-  Widget buildEasyRefresh(BuildContext context) {
-    return Stack(
-      children: [
-        NestedScrollView(
-          headerSliverBuilder: (context, innerBoxIsScrolled) => [
-            SliverAppBar(
-              elevation: 0.0,
-              titleSpacing: 0.0,
-              automaticallyImplyLeading: false,
-              // backgroundColor: Theme.of(context).canvasColor,
-              title: Text(""),
-            )
+    return SafeArea(
+      child: LayoutBuilder(builder: (context, constraints) {
+        return Column(
+          children: [
+            _buildFirstRow(context),
+            // Keep the spotlight entry available on smaller/landscape screens,
+            // but reserve the banner strip for screens with enough grid space.
+            if (constraints.maxHeight >= 600)
+              Observer(builder: (_) => _buidTagSpotlightRow(context)),
+            _buildSecondRow(context, I18n.of(context).recommend_for_you),
+            Expanded(
+              child: Observer(builder: (_) {
+                _lightingStore.iStores
+                    .removeWhere((store) => store.illusts!.hateByUser());
+                final stores = _lightingStore.iStores;
+                final orientation = MediaQuery.of(context).orientation;
+                final adaptive = orientation == Orientation.portrait
+                    ? userSetting.crossAdapt
+                    : userSetting.hCrossAdapt;
+                final columns = adaptive
+                    ? _buildSliderValue(context, orientation)
+                    : (orientation == Orientation.portrait
+                        ? userSetting.crossCount
+                        : userSetting.hCrossCount);
+                return SwipePagedGrid(
+                  footerTrailingSpace: 72,
+                  itemCount: stores.length,
+                  crossAxisCount: columns,
+                  resetToken: _resetToken,
+                  isLoading: _lightingStore.refreshing,
+                  hasMore: () => _lightingStore.nextUrl?.isNotEmpty == true,
+                  onLoadMore: _loadMore,
+                  onRefresh: _refresh,
+                  loadingLabel: I18n.of(context).footer_loading,
+                  emptyLabel: _lightingStore.errorMessage != null
+                      ? I18n.of(context).loading_failed_retry_message
+                      : I18n.of(context).no_more_data,
+                  retryLabel: I18n.of(context).loading_failed_retry_message,
+                  refreshLabel: I18n.of(context).refresh,
+                  itemBuilder: (context, index) => IllustCard(
+                    lightingStore: _lightingStore,
+                    store: stores[index],
+                    iStores: stores,
+                    fitToCell: true,
+                  ),
+                );
+              }),
+            ),
           ],
-          body: ListView(),
-        ),
-        EasyRefresh.builder(
-          controller: _easyRefreshController,
-          callLoadOverOffset: Platform.isIOS ? 2 : 5,
-          header: PixezDefault.header(context),
-          footer: PixezDefault.footer(context),
-          onRefresh: () async {
-            await fetchT();
-          },
-          refreshOnStart: true,
-          onLoad: () async {
-            await _lightingStore.fetchNext();
-          },
-          childBuilder: (context, physics) => Observer(
-            builder: (context) => _buildWaterFall(context, physics),
-          ),
-        ),
-      ],
+        );
+      }),
     );
   }
 
-  Widget _buildWaterFall(BuildContext context, ScrollPhysics physics) {
-    _lightingStore.iStores
-        .removeWhere((element) => element.illusts!.hateByUser());
-    return NotificationListener<ScrollNotification>(
-      onNotification: (ScrollNotification notification) {
-        ScrollMetrics metrics = notification.metrics;
-        if (backToTopVisible == metrics.atEdge && mounted) {
-          setState(() {
-            backToTopVisible = !backToTopVisible;
-          });
-        }
-        return true;
-      },
-      child: CustomScrollView(
-        controller: _scrollController,
-        physics: physics,
-        slivers: [
-          SliverToBoxAdapter(
-            child: Container(height: MediaQuery.of(context).padding.top),
-          ),
-          SliverToBoxAdapter(
-            child: _buildFirstRow(context),
-          ),
-          SliverToBoxAdapter(
-            child: _buidTagSpotlightRow(context),
-          ),
-          SliverToBoxAdapter(
-            child: _buildSecondRow(context, I18n.of(context).recommend_for_you),
-          ),
-          _buildWaterfall(context, MediaQuery.of(context).orientation)
-        ],
-      ),
-    );
+  Future<bool> _loadMore() async {
+    final success = await _lightingStore.fetchNext();
+    // nextUrl is not observable and can change even when all results are muted.
+    if (mounted) setState(() {});
+    return success;
   }
 
   int _buildSliderValue(BuildContext context, Orientation orientation) {
@@ -172,71 +151,6 @@ class _RecomSpolightPageState extends State<RecomSpolightPage>
     nowAdaptWidth = min(nowAdaptWidth, 2160);
     return max((MediaQuery.of(context).size.width / nowAdaptWidth), 1.0)
         .toInt();
-  }
-
-  Widget _buildWaterfall(BuildContext context, Orientation orientation) {
-    var count = 2;
-    if (orientation == Orientation.portrait
-        ? userSetting.crossAdapt
-        : userSetting.hCrossAdapt) {
-      count = _buildSliderValue(context, orientation);
-    } else {
-      count = (orientation == Orientation.portrait)
-          ? userSetting.crossCount
-          : userSetting.hCrossCount;
-    }
-    return _lightingStore.iStores.isNotEmpty
-        ? SliverWaterfallFlow(
-            gridDelegate: SliverWaterfallFlowDelegateWithFixedCrossAxisCount(
-              crossAxisCount: count,
-            ),
-            delegate:
-                SliverChildBuilderDelegate((BuildContext context, int index) {
-              return IllustCard(
-                lightingStore: _lightingStore,
-                store: _lightingStore.iStores[index],
-                iStores: _lightingStore.iStores,
-              );
-            }, childCount: _lightingStore.iStores.length),
-          )
-        : (_lightingStore.errorMessage?.isNotEmpty == true
-            ? SliverToBoxAdapter(
-                child: Container(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.max,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: <Widget>[
-                      Container(
-                        height: 50,
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.all(8.0),
-                        child: Text(':(',
-                            style: Theme.of(context).textTheme.headlineMedium),
-                      ),
-                      TextButton(
-                          onPressed: () {
-                            _lightingStore.fetch(force: true);
-                          },
-                          child: Text(I18n.of(context).retry)),
-                      Padding(
-                          padding: const EdgeInsets.all(16.0),
-                          child: Text(
-                            (_lightingStore.errorMessage?.contains("400") ==
-                                    true
-                                ? '${I18n.of(context).error_400_hint}\n ${_lightingStore.errorMessage}'
-                                : '${_lightingStore.errorMessage}'),
-                          ))
-                    ],
-                  ),
-                ),
-              )
-            : SliverToBoxAdapter(
-                child: Container(
-                  height: 30,
-                ),
-              ));
   }
 
   Widget _buidTagSpotlightRow(BuildContext context) {

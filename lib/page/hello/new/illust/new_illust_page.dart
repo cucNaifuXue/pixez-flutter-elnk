@@ -36,18 +36,17 @@ class NewIllustPage extends StatefulWidget {
 class _NewIllustPageState extends State<NewIllustPage> {
   late ApiForceSource futureGet;
   late StreamSubscription<String> subscription;
-  late ScrollController _scrollController;
+  int _resetToken = 0;
 
   @override
   void initState() {
-    _scrollController = ScrollController();
     futureGet = ApiForceSource(
         futureGet: (e) => apiClient.getFollowIllusts(widget.restrict, force: e),
         glanceKey: "follow_illust");
     super.initState();
     subscription = topStore.topStream.listen((event) {
       if (event == "301") {
-        _scrollController.position.jumpTo(0);
+        setState(() => _resetToken++);
       }
     });
   }
@@ -55,7 +54,6 @@ class _NewIllustPageState extends State<NewIllustPage> {
   @override
   void dispose() {
     subscription.cancel();
-    _scrollController.dispose();
     super.dispose();
   }
 
@@ -65,7 +63,8 @@ class _NewIllustPageState extends State<NewIllustPage> {
       children: [
         LightingList(
           source: futureGet,
-          scrollController: _scrollController,
+          resetToken: _resetToken,
+          footerTrailingSpace: 72,
           header: Container(
             height: 45.0,
           ),

@@ -15,7 +15,6 @@
  */
 
 import 'dart:async';
-import 'dart:math';
 import 'package:material_ui/material_ui.dart' hide SearchBar;
 import 'package:flutter_mobx/flutter_mobx.dart';
 import 'package:pixez/component/pixiv_image.dart';
@@ -23,10 +22,12 @@ import 'package:pixez/er/leader.dart';
 import 'package:pixez/i18n.dart';
 import 'package:pixez/main.dart';
 import 'package:pixez/models/tags.dart';
+import 'package:pixez/models/trend_tags.dart';
 import 'package:pixez/page/picture/illust_lighting_page.dart';
 import 'package:pixez/page/saucenao/sauce_nao_modal.dart';
 import 'package:pixez/page/search/result_page.dart';
 import 'package:pixez/page/search/search_bar.dart';
+import 'package:pixez/page/search/search_tag_panel.dart';
 import 'package:pixez/page/search/suggest/search_suggestion_page.dart';
 import 'package:pixez/page/search/trend_tags_store.dart';
 import 'package:pixez/page/webview/saucenao_webview_page.dart';
@@ -40,32 +41,19 @@ class SearchPage extends StatefulWidget {
 }
 
 class _SearchPageState extends State<SearchPage>
-    with TickerProviderStateMixin, AutomaticKeepAliveClientMixin {
+    with AutomaticKeepAliveClientMixin {
   String editString = "";
   late TrendTagsStore _trendTagsStore;
-  late AnimationController _animationController;
-  late Animation<double> animation;
+  bool _loadingTags = true;
+  bool _tagsFailed = false;
   late StreamSubscription<String> _topSubscription;
 
   @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _animationController.forward();
-  }
-
-  @override
   void initState() {
-    _animationController = AnimationController(
-      duration: const Duration(milliseconds: 500),
-      vsync: this,
-    );
-    animation = Tween(begin: 0.0, end: 0.25).animate(_animationController);
-
     _trendTagsStore = TrendTagsStore();
-    _tabController = TabController(length: 3, vsync: this);
     super.initState();
     tagHistoryStore.fetch();
-    _trendTagsStore.fetch();
+    _refreshTags();
     _topSubscription = topStore.topStream.listen((event) {
       if (event == "400") {
         _openSearch();
@@ -77,17 +65,13 @@ class _SearchPageState extends State<SearchPage>
     if (!mounted) return;
     Navigator.push(
       context,
-      PageRouteBuilder(
-        pageBuilder: (_, __, ___) => SearchSuggestionPage(),
-      ),
+      PageRouteBuilder(pageBuilder: (_, __, ___) => SearchSuggestionPage()),
     );
   }
 
   @override
   void dispose() {
     _topSubscription.cancel();
-    _animationController.dispose();
-    _tabController.dispose();
     super.dispose();
   }
 
@@ -115,341 +99,175 @@ class _SearchPageState extends State<SearchPage>
     );
   }
 
-  bool _tagExpand = false;
+  Future<bool> _refreshTags() async {
+    final success = await _trendTagsStore.fetch();
+    if (mounted) {
+      setState(() {
+        _loadingTags = false;
+        _tagsFailed = !success;
+      });
+    }
+    return success;
+  }
 
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    return LayoutBuilder(
-      builder: (context, snapshot) {
-        return Observer(
-          builder: (_) {
-            if (accountStore.now != null)
-              return NestedScrollView(
-                body: _buildContent(context, snapshot),
-                headerSliverBuilder:
-                    (BuildContext context, bool innerBoxIsScrolled) {
-                      return [
-                        SliverToBoxAdapter(
-                          child: Container(
-                            height: MediaQuery.of(context).padding.top,
-                          ),
-                        ),
-                        SliverToBoxAdapter(
-                          child: SearchBar(
-                            onSaucenao: () {
-                              if (userSetting.useSaunceNaoWebview) {
-                                Leader.push(context, SauncenaoWebview());
-                              } else {
-                                SauceNaoModal.show(context);
-                              }
-                            },
-                          ),
-                        ),
-                      ];
-                    },
-              );
-            return Column(
-              children: <Widget>[
-                AppBar(
-                  automaticallyImplyLeading: false,
-                  title: Text(
-                    I18n.of(context).search,
-                    style: Theme.of(context).textTheme.titleLarge,
+    return Observer(
+      builder: (_) {
+        if (accountStore.now == null) {
+          return Column(
+            children: [
+              AppBar(
+                automaticallyImplyLeading: false,
+                title: Text(I18n.of(context).search),
+                actions: [
+                  IconButton(
+                    icon: const Icon(Icons.search),
+                    onPressed: _openSearch,
                   ),
-                  actions: <Widget>[
-                    IconButton(
-                      icon: Icon(Icons.search),
-                      onPressed: () {
-                        Navigator.of(context, rootNavigator: true).push(
-                          MaterialPageRoute(
-                            builder: (context) => SearchSuggestionPage(),
-                          ),
-                        );
-                      },
-                    ),
-                  ],
+                ],
+              ),
+            ],
+          );
+        }
+        return SafeArea(
+          child: Column(
+            children: [
+              SearchBar(
+                onSaucenao: () {
+                  if (userSetting.useSaunceNaoWebview) {
+                    Leader.push(context, SauncenaoWebview());
+                  } else {
+                    SauceNaoModal.show(context);
+                  }
+                },
+              ),
+              _buildFirstRow(context),
+              Expanded(
+                child: Observer(
+                  builder: (_) {
+                    final history = tagHistoryStore.tags
+                        .where((tag) => tag.type == null || tag.type == 0)
+                        .toList();
+                    final tags = _trendTagsStore.trendTags;
+                    return SearchTagPanel(
+                      tagCount: tags.length,
+                      historyCount: history.length,
+                      isLoading: _loadingTags,
+                      hasError: _tagsFailed,
+                      onRefresh: _refreshTags,
+                      onClearHistory: _clearHistory,
+                      tagBuilder: (context, index) => _buildTag(tags[index]),
+                      historyBuilder: (context, index) => Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 5),
+                        child: Center(
+                          child: buildActionChip(history[index], context),
+                        ),
+                      ),
+                    );
+                  },
                 ),
-              ],
-            );
-          },
+              ),
+            ],
+          ),
         );
       },
     );
   }
 
-  Widget _buildContent(BuildContext context, BoxConstraints snapshot) {
-    final rowCount = max(3, (snapshot.maxWidth / 200).floor());
-    return RefreshIndicator(
-      onRefresh: () {
-        return _trendTagsStore.fetch();
-      },
-      child: CustomScrollView(
-        slivers: [
-          SliverToBoxAdapter(child: _buildFirstRow(context)),
-          SliverToBoxAdapter(
-            child: Observer(
-              builder: (context) {
-                if (tagHistoryStore.tags
-                    .where(
-                      (element) => element.type == null || element.type == 0,
-                    )
-                    .isNotEmpty)
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text(
-                          I18n.of(context).history,
-                          style: TextStyle(
-                            fontSize: 16.0,
-                            color: Theme.of(
-                              context,
-                            ).textTheme.headlineSmall!.color,
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                else
-                  return Container();
-              },
-            ),
+  void _clearHistory() {
+    HapticUtil.heavy();
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(I18n.of(context).clean_history),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text(I18n.of(context).cancel),
           ),
-          SliverPadding(
-            padding: EdgeInsets.symmetric(horizontal: 8),
-            sliver: SliverToBoxAdapter(
-              child: Observer(
-                builder: (BuildContext context) {
-                  if (tagHistoryStore.tags.isNotEmpty) {
-                    final targetTags = tagHistoryStore.tags
-                        .where(
-                          (element) =>
-                              element.type == null || element.type == 0,
-                        )
-                        .toList();
-                    if (targetTags.length > 20) {
-                      final resultTags = targetTags.sublist(0, 12);
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 5.0),
-                        child: Wrap(
-                          children: [
-                            for (var f in _tagExpand ? targetTags : resultTags)
-                              buildActionChip(f, context),
-                            ActionChip(
-                              label: AnimatedSwitcher(
-                                duration: Duration(milliseconds: 300),
-                                transitionBuilder: (child, anim) {
-                                  return ScaleTransition(
-                                    child: child,
-                                    scale: anim,
-                                  );
-                                },
-                                child: Icon(
-                                  !_tagExpand
-                                      ? Icons.expand_more
-                                      : Icons.expand_less,
-                                ),
-                              ),
-                              padding: EdgeInsets.all(0.0),
-                              onPressed: () {
-                                setState(() {
-                                  _tagExpand = !_tagExpand;
-                                });
-                              },
-                            ),
-                          ],
-                          runSpacing: 0.0,
-                          spacing: 5.0,
-                        ),
-                      );
-                    }
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 5.0),
-                      child: Wrap(
-                        children: [
-                          for (var f in targetTags) buildActionChip(f, context),
-                        ],
-                        runSpacing: 0.0,
-                        spacing: 3.0,
-                      ),
-                    );
-                  }
-                  return Container();
-                },
-              ),
-            ),
-          ),
-          SliverToBoxAdapter(
-            child: Observer(
-              builder: (context) {
-                if (tagHistoryStore.tags
-                    .where(
-                      (element) => element.type == null || element.type == 0,
-                    )
-                    .isNotEmpty)
-                  return InkWell(
-                    onTap: () {
-                      HapticUtil.heavy();
-                      showDialog(
-                        context: context,
-                        builder: (context) {
-                          return AlertDialog(
-                            title: Text(I18n.of(context).clean_history),
-                            actions: [
-                              TextButton(
-                                onPressed: () {
-                                  Navigator.of(context).pop();
-                                },
-                                child: Text(I18n.of(context).cancel),
-                              ),
-                              TextButton(
-                                onPressed: () {
-                                  tagHistoryStore.deleteAll();
-                                  Navigator.of(context).pop();
-                                },
-                                child: Text(I18n.of(context).ok),
-                              ),
-                            ],
-                          );
-                        },
-                      );
-                    },
-                    child: Center(
-                      child: Padding(
-                        padding: const EdgeInsets.all(8.0),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.delete_outline,
-                              size: 18.0,
-                              color: Theme.of(
-                                context,
-                              ).textTheme.bodySmall!.color,
-                            ),
-                            Text(
-                              I18n.of(context).clear_search_tag_history,
-                              style: Theme.of(context).textTheme.bodyMedium!
-                                  .copyWith(
-                                    color: Theme.of(
-                                      context,
-                                    ).textTheme.bodySmall!.color,
-                                  ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  );
-                return Container();
-              },
-            ),
-          ),
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              child: Text(
-                I18n.of(context).recommand_tag,
-                style: TextStyle(
-                  fontSize: 16.0,
-                  color: Theme.of(context).textTheme.titleLarge!.color,
-                ),
-              ),
-            ),
-          ),
-          if (_trendTagsStore.trendTags.isNotEmpty)
-            SliverPadding(
-              padding: EdgeInsets.all(8.0),
-              sliver: SliverGrid(
-                delegate: SliverChildBuilderDelegate((context, index) {
-                  final tags = _trendTagsStore.trendTags;
-                  return GestureDetector(
-                    onTap: () {
-                      Navigator.of(context, rootNavigator: true).push(
-                        MaterialPageRoute(
-                          builder: (_) {
-                            return ResultPage(word: tags[index].tag);
-                          },
-                        ),
-                      );
-                    },
-                    onLongPress: () {
-                      Navigator.of(context, rootNavigator: true).push(
-                        MaterialPageRoute(
-                          builder: (_) {
-                            return IllustLightingPage(
-                              id: tags[index].illust.id,
-                            );
-                          },
-                        ),
-                      );
-                    },
-                    child: Card(
-                      clipBehavior: Clip.antiAlias,
-                      shape: const RoundedRectangleBorder(
-                        borderRadius: BorderRadius.all(Radius.circular(8.0)),
-                      ),
-                      child: Stack(
-                        children: <Widget>[
-                          PixivImage(
-                            tags[index].illust.imageUrls.squareMedium,
-                            fit: BoxFit.cover,
-                          ),
-                          Opacity(
-                            opacity: 0.4,
-                            child: Container(
-                              decoration: BoxDecoration(color: Colors.black),
-                            ),
-                          ),
-                          Align(
-                            child: Padding(
-                              padding: const EdgeInsets.all(2.0),
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: <Widget>[
-                                  Text(
-                                    "#${tags[index].tag}",
-                                    textAlign: TextAlign.center,
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                  if (tags[index].translatedName != null &&
-                                      tags[index].translatedName!.isNotEmpty)
-                                    Text(
-                                      tags[index].translatedName!,
-                                      textAlign: TextAlign.center,
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 10,
-                                      ),
-                                    ),
-                                ],
-                              ),
-                            ),
-                            alignment: Alignment.bottomCenter,
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                }, childCount: _trendTagsStore.trendTags.length),
-                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: rowCount,
-                ),
-              ),
-            ),
-          SliverToBoxAdapter(
-            child: Container(
-              height: (MediaQuery.of(context).size.width / 3) - 16,
-            ),
+          TextButton(
+            onPressed: () {
+              tagHistoryStore.deleteAll();
+              Navigator.of(context).pop();
+            },
+            child: Text(I18n.of(context).ok),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildTag(TrendTags tag) {
+    return GestureDetector(
+      onTap: () {
+        Navigator.of(
+          context,
+          rootNavigator: true,
+        ).push(MaterialPageRoute(builder: (_) => ResultPage(word: tag.tag)));
+      },
+      onLongPress: () {
+        Navigator.of(context, rootNavigator: true).push(
+          MaterialPageRoute(
+            builder: (_) => IllustLightingPage(id: tag.illust.id),
+          ),
+        );
+      },
+      child: Card(
+        clipBehavior: Clip.antiAlias,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(8)),
+        ),
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: PixivImage(
+                tag.illust.imageUrls.squareMedium,
+                fit: BoxFit.cover,
+                fade: false,
+                placeWidget: Center(
+                  child: Text(I18n.of(context).footer_loading),
+                ),
+              ),
+            ),
+            Opacity(
+              opacity: 0.4,
+              child: Container(
+                decoration: const BoxDecoration(color: Colors.black),
+              ),
+            ),
+            Align(
+              alignment: Alignment.bottomCenter,
+              child: Padding(
+                padding: const EdgeInsets.all(2),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      '#${tag.tag}',
+                      textAlign: TextAlign.center,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: Colors.white, fontSize: 12),
+                    ),
+                    if (tag.translatedName?.isNotEmpty == true)
+                      Text(
+                        tag.translatedName!,
+                        textAlign: TextAlign.center,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -484,7 +302,12 @@ class _SearchPageState extends State<SearchPage>
       },
       child: ActionChip(
         padding: EdgeInsets.all(0.0),
-        label: Text(f.name, style: TextStyle(fontSize: 12.0)),
+        label: Text(
+          f.name,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(fontSize: 12.0),
+        ),
         onPressed: () {
           Navigator.of(context, rootNavigator: true).push(
             MaterialPageRoute(
@@ -496,8 +319,6 @@ class _SearchPageState extends State<SearchPage>
       ),
     );
   }
-
-  late TabController _tabController;
 
   @override
   bool get wantKeepAlive => true;

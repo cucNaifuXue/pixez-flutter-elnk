@@ -35,7 +35,7 @@ class RankModePage extends StatefulWidget {
 }
 
 class _RankModePageState extends State<RankModePage> {
-  late ScrollController _scrollController;
+  int _resetToken = 0;
   late StreamSubscription<String> subscription;
   late ApiForceSource source;
   var list = [
@@ -45,7 +45,6 @@ class _RankModePageState extends State<RankModePage> {
 
   @override
   void dispose() {
-    _scrollController.dispose();
     subscription.cancel();
     super.dispose();
   }
@@ -57,11 +56,10 @@ class _RankModePageState extends State<RankModePage> {
           apiClient.getIllustRanking(widget.mode!, widget.date, force: e),
       glanceKey: "rank",
     );
-    _scrollController = ScrollController();
     super.initState();
     subscription = topStore.topStream.listen((event) {
       if (event == (201 + widget.index!).toString()) {
-        _scrollController.position.jumpTo(0);
+        setState(() => _resetToken++);
       }
     });
   }
@@ -69,7 +67,8 @@ class _RankModePageState extends State<RankModePage> {
   @override
   Widget build(BuildContext context) {
     return LightingList(
-        scrollController: _scrollController,
+        resetToken: _resetToken,
+          footerTrailingSpace: 72,
         source: source,
         ai: list.contains(widget.mode ?? ""));
   }

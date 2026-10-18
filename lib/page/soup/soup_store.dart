@@ -32,13 +32,18 @@ part 'soup_store.g.dart';
 class SoupStore = _SoupStoreBase with _$SoupStore;
 
 abstract class _SoupStoreBase with Store {
-  final dio = Dio(BaseOptions(headers: {
-    HttpHeaders.acceptLanguageHeader:
-        userSetting.languageNum < 5 ? ApiClient.Accept_Language : "en-US",
-    'user-agent':
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/85.0.4183.26 Safari/537.36 Edg/85.0.564.13',
-    HttpHeaders.refererHeader: 'https://www.pixivision.net/zh/',
-  }));
+  final dio = Dio(
+    BaseOptions(
+      headers: {
+        HttpHeaders.acceptLanguageHeader: userSetting.languageNum < 5
+            ? ApiClient.Accept_Language
+            : "en-US",
+        'user-agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/85.0.4183.26 Safari/537.36 Edg/85.0.564.13',
+        HttpHeaders.refererHeader: 'https://www.pixivision.net/zh/',
+      },
+    ),
+  );
 
   ObservableList<AmWork> amWorks = ObservableList();
 
@@ -46,21 +51,25 @@ abstract class _SoupStoreBase with Store {
   String? description;
 
   @action
-  fetch(String url) async {
+  Future<bool> fetch(String url) async {
     try {
       final compatibleClient = await r.RhttpCompatibleClient.create();
       dio.httpClientAdapter = ConversionLayerAdapter(compatibleClient);
       if (userSetting.languageNum == 0 || userSetting.languageNum >= 5) {
-        _fetchEn(url);
+        await _fetchEn(url);
       } else {
-        _fetchCNTW(url);
+        await _fetchCNTW(url);
       }
+      return true;
     } on DioException {
       BotToast.showText(text: "404 NOT FOUND");
-    } catch (e) {}
+      return false;
+    } catch (e) {
+      return false;
+    }
   }
 
-  _fetchEn(url) async {
+  Future<void> _fetchEn(String url) async {
     Response response = await dio.request(url);
     var document = parse(response.data);
     amWorks.clear();
@@ -99,16 +108,19 @@ abstract class _SoupStoreBase with Store {
               segments.length > 2 &&
               segments[segments.length - 2] == 'artworks') {
             amWork.arworkLink = a;
-            amWork.showImage =
-                value.getElementsByTagName('img')[1].attributes['src']!;
+            amWork.showImage = value
+                .getElementsByTagName('img')[1]
+                .attributes['src']!;
             amWork.title = value.getElementsByTagName('h3').first.text;
           } else if (a.startsWith('https') &&
               segments.length > 2 &&
               segments[segments.length - 2] == 'users') {
             amWork.userLink = a;
             amWork.user = value.getElementsByTagName('p').first.text;
-            amWork.userImage =
-                value.getElementsByTagName('img').first.attributes['src']!;
+            amWork.userImage = value
+                .getElementsByTagName('img')
+                .first
+                .attributes['src']!;
           }
         }
         if (amWork.userLink == null || amWork.arworkLink == null) {
@@ -121,7 +133,7 @@ abstract class _SoupStoreBase with Store {
     }
   }
 
-  _fetchCNTW(url) async {
+  Future<void> _fetchCNTW(String url) async {
     Response response = await dio.request(url);
     var document = parse(response.data);
     amWorks.clear();
@@ -157,14 +169,17 @@ abstract class _SoupStoreBase with Store {
           var a = aa.attributes['href']!;
           if (a.contains('https://www.pixiv.net/artworks')) {
             amWork.arworkLink = a;
-            amWork.showImage =
-                value.getElementsByTagName('img')[1].attributes['src']!;
+            amWork.showImage = value
+                .getElementsByTagName('img')[1]
+                .attributes['src']!;
             amWork.title = value.getElementsByTagName('h3').first.text;
           } else if (a.contains('https://www.pixiv.net/users')) {
             amWork.userLink = a;
             amWork.user = value.getElementsByTagName('p').first.text;
-            amWork.userImage =
-                value.getElementsByTagName('img').first.attributes['src']!;
+            amWork.userImage = value
+                .getElementsByTagName('img')
+                .first
+                .attributes['src']!;
           }
         }
         if (amWork.userLink == null || amWork.arworkLink == null) {

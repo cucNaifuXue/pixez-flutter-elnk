@@ -16,19 +16,17 @@
 
 import 'dart:math';
 
-import 'package:easy_refresh/easy_refresh.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
 import 'package:pixez/component/illust_card.dart';
-import 'package:pixez/component/pixez_default_header.dart';
+import 'package:pixez/component/swipe_paged_grid.dart';
 import 'package:pixez/component/sort_group.dart';
 import 'package:pixez/exts.dart';
 import 'package:pixez/i18n.dart';
 import 'package:pixez/lighting/lighting_store.dart';
 import 'package:pixez/main.dart';
 import 'package:pixez/network/api_client.dart';
-import 'package:waterfall_flow/waterfall_flow.dart';
 
 class WorksPage extends StatefulWidget {
   final int id;
@@ -37,14 +35,14 @@ class WorksPage extends StatefulWidget {
   final String workType;
   final ValueChanged<String> onWorkTypeChange;
 
-  const WorksPage(
-      {Key? key,
-      required this.id,
-      required this.store,
-      required this.portal,
-      required this.workType,
-      required this.onWorkTypeChange})
-      : super(key: key);
+  const WorksPage({
+    Key? key,
+    required this.id,
+    required this.store,
+    required this.portal,
+    required this.workType,
+    required this.onWorkTypeChange,
+  }) : super(key: key);
 
   @override
   _WorksPageState createState() => _WorksPageState();
@@ -52,15 +50,12 @@ class WorksPage extends StatefulWidget {
 
 class _WorksPageState extends State<WorksPage> {
   late LightingStore _store;
-  late EasyRefreshController _easyRefreshController;
+  int _resetToken = 0;
   late String _workType;
 
   @override
   void initState() {
-    _easyRefreshController = EasyRefreshController(
-        controlFinishLoad: true, controlFinishRefresh: true);
     _store = widget.store;
-    _store.easyRefreshController = _easyRefreshController;
     super.initState();
     _store.fetch();
     _workType = widget.workType;
@@ -68,16 +63,17 @@ class _WorksPageState extends State<WorksPage> {
 
   @override
   void dispose() {
-    _easyRefreshController.dispose();
     _store.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Observer(builder: (_) {
-      return _buildContent(context);
-    });
+    return Observer(
+      builder: (_) {
+        return _buildContent(context);
+      },
+    );
   }
 
   Widget _buildContent(context) {
@@ -93,124 +89,113 @@ class _WorksPageState extends State<WorksPage> {
         mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.center,
         children: <Widget>[
-          Container(
-            height: 50,
-          ),
+          Container(height: 50),
           Padding(
             padding: const EdgeInsets.all(8.0),
-            child:
-                Text(':(', style: Theme.of(context).textTheme.headlineMedium),
+            child: Text(
+              ':(',
+              style: Theme.of(context).textTheme.headlineMedium,
+            ),
           ),
           TextButton(
-              onPressed: () {
-                _store.fetch(force: true);
-              },
-              child: Text(I18n.of(context).retry)),
+            onPressed: () {
+              _store.fetch(force: true);
+            },
+            child: Text(I18n.of(context).retry),
+          ),
           Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Text(
-                (_store.errorMessage?.contains("400") == true
-                    ? '${I18n.of(context).error_400_hint}\n ${_store.errorMessage}'
-                    : '${_store.errorMessage}'),
-              ))
+            padding: const EdgeInsets.all(16.0),
+            child: Text(
+              (_store.errorMessage?.contains("400") == true
+                  ? '${I18n.of(context).error_400_hint}\n ${_store.errorMessage}'
+                  : '${_store.errorMessage}'),
+            ),
+          ),
         ],
       ),
     );
   }
 
   Widget _buildWorks(BuildContext context) {
+    _store.iStores.removeWhere(
+      (element) => element.illusts!.hateByUser(ai: false),
+    );
+    final itemCount = _store.iStores.length;
+    final isLoading = _store.refreshing;
+    final columns = _crossAxisCount();
     return SafeArea(
-        top: false,
-        bottom: false,
-        child: Builder(
-          builder: (BuildContext context) {
-            return EasyRefresh.builder(
-                controller: _easyRefreshController,
-                onLoad: () {
-                  _store.fetchNext();
-                },
-                onRefresh: () {
-                  _store.fetch(force: true);
-                },
-                header: PixezDefault.header(
-                  context,
-                  position: IndicatorPosition.locator,
-                  safeArea: false,
-                ),
-                footer: PixezDefault.footer(
-                  context,
-                  position: IndicatorPosition.locator,
-                ),
-                childBuilder: (context, phy) {
-                  return Observer(builder: (_) {
-                    return CustomScrollView(
-                      physics: phy,
-                      key: PageStorageKey<String>(widget.portal),
-                      slivers: [
-                        SliverPinnedOverlapInjector(
-                          handle:
-                              NestedScrollView.sliverOverlapAbsorberHandleFor(
-                                  context),
-                        ),
-                        const HeaderLocator.sliver(),
-                        SliverPersistentHeader(
-                            delegate: SliverChipDelegate(
-                                Container(
-                                  child: Center(
-                                    child: _buildSortChip(),
-                                  ),
-                                ),
-                                height: 52),
-                            pinned: true),
-                        if (_store.refreshing && _store.iStores.isEmpty)
-                          SliverToBoxAdapter(
-                            child: Container(
-                              height: 200,
-                              child: Center(
-                                child: CircularProgressIndicator(),
-                              ),
-                            ),
+      top: false,
+      child: CustomScrollView(
+        physics: const NeverScrollableScrollPhysics(),
+        key: PageStorageKey<String>(widget.portal),
+        slivers: [
+          SliverPinnedOverlapInjector(
+            handle: NestedScrollView.sliverOverlapAbsorberHandleFor(context),
+          ),
+          SliverPersistentHeader(
+            delegate: SliverChipDelegate(
+              Center(child: _buildSortChip()),
+              height: 52,
+            ),
+            pinned: true,
+          ),
+          SliverLayoutBuilder(
+            builder: (context, constraints) {
+              // The nested viewport already excludes the expanded profile.
+              // Reserve exactly the visible area after the pinned filters.
+              final height = max(0.0, constraints.remainingPaintExtent);
+              return SliverToBoxAdapter(
+                child: SizedBox(
+                  height: height,
+                  // A very tall profile header can temporarily leave too
+                  // little space for a card. Reveal it by collapsing the header.
+                  child: height < 160
+                      ? null
+                      : SwipePagedGrid(
+                          itemCount: itemCount,
+                          crossAxisCount: columns,
+                          resetToken: _resetToken,
+                          isLoading: isLoading,
+                          hasMore: () => _store.nextUrl?.isNotEmpty == true,
+                          onLoadMore: _loadMore,
+                          onRefresh: () => _store.fetch(force: true),
+                          loadingLabel: I18n.of(context).footer_loading,
+                          emptyLabel: I18n.of(context).no_more_data,
+                          retryLabel: I18n.of(
+                            context,
+                          ).loading_failed_retry_message,
+                          refreshLabel: I18n.of(context).refresh,
+                          itemBuilder: (context, index) => IllustCard(
+                            lightingStore: _store,
+                            store: _store.iStores[index],
+                            iStores: _store.iStores,
+                            fitToCell: true,
                           ),
-                        SliverWaterfallFlow(
-                          gridDelegate: _buildGridDelegate(),
-                          delegate: _buildSliverChildBuilderDelegate(context),
                         ),
-                        const FooterLocator.sliver(),
-                      ],
-                    );
-                  });
-                });
-          },
-        ));
-  }
-
-  SliverWaterfallFlowDelegate _buildGridDelegate() {
-    var count = 2;
-    if (MediaQuery.of(context).orientation == Orientation.portrait
-        ? userSetting.crossAdapt
-        : userSetting.hCrossAdapt) {
-      count = _buildSliderValue();
-    } else {
-      count = (MediaQuery.of(context).orientation == Orientation.portrait)
-          ? userSetting.crossCount
-          : userSetting.hCrossCount;
-    }
-    return SliverWaterfallFlowDelegateWithFixedCrossAxisCount(
-      crossAxisCount: count,
+                ),
+              );
+            },
+          ),
+        ],
+      ),
     );
   }
 
-  SliverChildBuilderDelegate _buildSliverChildBuilderDelegate(
-      BuildContext context) {
-    _store.iStores
-        .removeWhere((element) => element.illusts!.hateByUser(ai: false));
-    return SliverChildBuilderDelegate((BuildContext context, int index) {
-      return IllustCard(
-        lightingStore: _store,
-        store: _store.iStores[index],
-        iStores: _store.iStores,
-      );
-    }, childCount: _store.iStores.length);
+  Future<bool> _loadMore() async {
+    final success = await _store.fetchNext();
+    if (mounted) setState(() {});
+    return success;
+  }
+
+  int _crossAxisCount() {
+    if (MediaQuery.of(context).orientation == Orientation.portrait
+        ? userSetting.crossAdapt
+        : userSetting.hCrossAdapt) {
+      return _buildSliderValue();
+    }
+    return MediaQuery.of(context).orientation == Orientation.portrait
+        ? userSetting.crossCount
+        : userSetting.hCrossCount;
   }
 
   int _buildSliderValue() {
@@ -232,34 +217,29 @@ class _WorksPageState extends State<WorksPage> {
         final type = index == 0 ? 'illust' : 'manga';
         setState(() {
           _workType = type;
+          _resetToken++;
         });
         widget.onWorkTypeChange(_workType);
         _store.source = ApiForceSource(
-            futureGet: (bool e) => apiClient.getUserIllusts(widget.id, type));
+          futureGet: (bool e) => apiClient.getUserIllusts(widget.id, type),
+        );
         _store.fetch();
       },
-      children: [
-        I18n.of(context).illust,
-        I18n.of(context).manga,
-      ],
+      children: [I18n.of(context).illust, I18n.of(context).manga],
       initIndex: _workType == 'illust' ? 0 : 1,
     );
   }
 }
 
 class SliverPinnedOverlapInjector extends SingleChildRenderObjectWidget {
-  const SliverPinnedOverlapInjector({
-    required this.handle,
-    Key? key,
-  }) : super(key: key);
+  const SliverPinnedOverlapInjector({required this.handle, Key? key})
+    : super(key: key);
 
   final SliverOverlapAbsorberHandle handle;
 
   @override
   RenderSliverPinnedOverlapInjector createRenderObject(BuildContext context) {
-    return RenderSliverPinnedOverlapInjector(
-      handle: handle,
-    );
+    return RenderSliverPinnedOverlapInjector(handle: handle);
   }
 
   @override
@@ -291,7 +271,8 @@ class RenderSliverPinnedOverlapInjector extends RenderSliver {
     if (attached) {
       handle.addListener(markNeedsLayout);
       if (handle.layoutExtent != _currentLayoutExtent ||
-          handle.scrollExtent != _currentMaxExtent) markNeedsLayout();
+          handle.scrollExtent != _currentMaxExtent)
+        markNeedsLayout();
     }
   }
 
@@ -300,7 +281,8 @@ class RenderSliverPinnedOverlapInjector extends RenderSliver {
     super.attach(owner);
     handle.addListener(markNeedsLayout);
     if (handle.layoutExtent != _currentLayoutExtent ||
-        handle.scrollExtent != _currentMaxExtent) markNeedsLayout();
+        handle.scrollExtent != _currentMaxExtent)
+      markNeedsLayout();
   }
 
   @override
@@ -344,12 +326,15 @@ class SliverChipDelegate extends SliverPersistentHeaderDelegate {
 
   @override
   Widget build(
-      BuildContext context, double shrinkOffset, bool overlapsContent) {
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) {
     return child;
   }
 
   @override
   bool shouldRebuild(SliverChipDelegate oldDelegate) {
-    return false;
+    return child != oldDelegate.child || height != oldDelegate.height;
   }
 }

@@ -30,8 +30,13 @@ import 'package:pixez/page/user/users_page.dart';
 class PainterCard extends StatefulWidget {
   final UserPreviews user;
   final bool isNovel;
-  const PainterCard({Key? key, required this.user, this.isNovel = false})
-      : super(key: key);
+  final bool paged;
+  const PainterCard({
+    Key? key,
+    required this.user,
+    this.isNovel = false,
+    this.paged = false,
+  }) : super(key: key);
 
   @override
   State<PainterCard> createState() => _PainterCardState();
@@ -52,25 +57,32 @@ class _PainterCardState extends State<PainterCard> {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: () async {
-        await Navigator.of(context, rootNavigator: true)
-            .push(MaterialPageRoute(builder: (BuildContext context) {
-          if (isNovel) {
-            return NovelUsersPage(
-              id: _user.user.id,
-            );
-          }
-          return UsersPage(
-            id: _user.user.id,
-            userStore: UserStore(_user.user.id, null, _user.user),
-          );
-        }));
+        await Navigator.of(context, rootNavigator: true).push(
+          MaterialPageRoute(
+            builder: (BuildContext context) {
+              if (isNovel) {
+                return NovelUsersPage(id: _user.user.id);
+              }
+              return UsersPage(
+                id: _user.user.id,
+                userStore: UserStore(_user.user.id, null, _user.user),
+              );
+            },
+          ),
+        );
         setState(() {});
       },
       child: Card(
         clipBehavior: Clip.antiAlias,
         child: Container(
           child: Column(
-            children: [_buildPreviewSlivers(context), buildPadding(context)],
+            children: [
+              if (widget.paged)
+                Expanded(child: _buildPreviewSlivers(context))
+              else
+                _buildPreviewSlivers(context),
+              buildPadding(context),
+            ],
           ),
         ),
       ),
@@ -101,18 +113,19 @@ class _PainterCardState extends State<PainterCard> {
                                   padding: const EdgeInsets.all(8.0),
                                   child: Text(
                                     _user.novels[i].title,
-                                    style:
-                                        Theme.of(context).textTheme.titleSmall,
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.titleSmall,
                                     maxLines: 3,
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
-                              )
+                              ),
                             ],
                           ),
                         )
                       : Container(),
-                )
+                ),
             ],
           )
         : Row(
@@ -139,7 +152,7 @@ class _PainterCardState extends State<PainterCard> {
                           ),
                         )
                       : Container(),
-                )
+                ),
             ],
           );
   }
@@ -157,27 +170,33 @@ class _PainterCardState extends State<PainterCard> {
               url: _user.user.profileImageUrls.medium,
               id: _user.user.id,
               onTap: () {
-                Navigator.of(context, rootNavigator: true)
-                    .push(MaterialPageRoute(builder: (BuildContext context) {
-                  if (isNovel) {
-                    return NovelUsersPage(
-                      id: _user.user.id,
-                    );
-                  }
-                  return UsersPage(
-                    id: _user.user.id,
-                    userStore: UserStore(_user.user.id, null, _user.user),
-                    heroTag: this.hashCode.toString(),
-                  );
-                }));
+                Navigator.of(context, rootNavigator: true).push(
+                  MaterialPageRoute(
+                    builder: (BuildContext context) {
+                      if (isNovel) {
+                        return NovelUsersPage(id: _user.user.id);
+                      }
+                      return UsersPage(
+                        id: _user.user.id,
+                        userStore: UserStore(_user.user.id, null, _user.user),
+                        heroTag: this.hashCode.toString(),
+                      );
+                    },
+                  ),
+                );
               },
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Center(child: Text(_user.user.name)),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12.0),
+              child: Text(
+                _user.user.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
           ),
-          Spacer(),
           if (_user.user.isFollowed != null)
             UserFollowButton(
               id: _user.user.id,
@@ -217,7 +236,7 @@ class _PainterCardState extends State<PainterCard> {
                   print(e);
                 }
               },
-            )
+            ),
         ],
       ),
     );

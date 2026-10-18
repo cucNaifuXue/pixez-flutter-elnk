@@ -163,7 +163,8 @@ class CargoKitPlugin implements Plugin<Project> {
                     ndkVersion = plugin.project.android.ndkVersion
                     sdkDirectory = plugin.project.android.sdkDirectory
                     minSdkVersion = plugin.project.android.defaultConfig.minSdkVersion.apiLevel as int
-                    compileSdkVersion = plugin.project.android.compileSdkVersion.substring(8) as int
+                    // NDK targets use the major API level, including for SDKs such as android-37.0.
+                    compileSdkVersion = plugin.project.android.compileSdkVersion.substring(8).tokenize('.').first() as int
                     targetPlatforms = platforms
                     pluginFile = CargoKitPlugin.file
                 }

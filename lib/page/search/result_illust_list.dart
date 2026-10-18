@@ -55,7 +55,7 @@ class ResultIllustList extends StatefulWidget {
 class _ResultIllustListState extends State<ResultIllustList> {
   late ResultIllustStore resultIllustStore;
   late ApiForceSource futureGet;
-  late ScrollController _scrollController;
+  int _resetToken = 0;
   late StreamSubscription<String> listen;
   final sort = [
     "date_desc",
@@ -108,12 +108,11 @@ class _ResultIllustListState extends State<ResultIllustList> {
 
   @override
   void initState() {
-    _scrollController = ScrollController();
     checkInit();
     super.initState();
     listen = topStore.topStream.listen((event) {
       if (event == "401") {
-        _scrollController.position.jumpTo(0);
+        setState(() => _resetToken++);
       }
     });
   }
@@ -226,7 +225,7 @@ class _ResultIllustListState extends State<ResultIllustList> {
                   ? Container()
                   : LightingList(
                       source: futureGet,
-                      scrollController: _scrollController,
+                      resetToken: _resetToken,
                       filter: (illust) {
                         return switch (ugoiraFilter) {
                           UgoiraFilter.all => true,

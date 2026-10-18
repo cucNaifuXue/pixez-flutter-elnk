@@ -13,13 +13,15 @@
  *  this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+import 'dart:math';
+
 import 'package:easy_refresh/easy_refresh.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
 import 'package:pixez/component/painer_card.dart';
+import 'package:pixez/component/swipe_paged_grid.dart';
 import 'package:pixez/i18n.dart';
 import 'package:pixez/page/hello/recom/recom_user_store.dart';
-import 'package:waterfall_flow/waterfall_flow.dart';
 
 class RecomUserPage extends StatefulWidget {
   final RecomUserStore? recomUserStore;
@@ -33,17 +35,34 @@ class RecomUserPage extends StatefulWidget {
 class _RecomUserPageState extends State<RecomUserPage> {
   late EasyRefreshController _refreshController;
   late RecomUserStore _recomUserStore;
+  bool _loading = false;
+  int _resetToken = 0;
 
   @override
   void initState() {
+    super.initState();
     _refreshController = EasyRefreshController(
-        controlFinishLoad: true, controlFinishRefresh: true);
+      controlFinishLoad: true,
+      controlFinishRefresh: true,
+    );
     _recomUserStore =
         widget.recomUserStore ?? RecomUserStore(_refreshController);
-    if (widget.recomUserStore != null) {
-      _recomUserStore.controller = _refreshController;
+    _recomUserStore.controller = _refreshController;
+    if (widget.recomUserStore == null) {
+      _loading = true;
+      _refresh();
     }
-    super.initState();
+  }
+
+  Future<bool> _refresh() async {
+    final success = await _recomUserStore.fetch();
+    if (mounted) {
+      setState(() {
+        _loading = false;
+        if (success) _resetToken++;
+      });
+    }
+    return success;
   }
 
   @override
@@ -55,34 +74,38 @@ class _RecomUserPageState extends State<RecomUserPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Observer(builder: (context) {
-      return Scaffold(
-        appBar: AppBar(
-          title: Text(I18n.of(context).recommend_for_you),
-        ),
-        body: EasyRefresh(
-          controller: _refreshController,
-          onRefresh: () => _recomUserStore.fetch(),
-          onLoad: () => _recomUserStore.next(),
-          refreshOnStart: widget.recomUserStore == null,
-          child: _buildList(),
-        ),
-      );
-    });
-  }
-
-  Widget _buildList() {
-    return WaterfallFlow.builder(
-      gridDelegate: SliverWaterfallFlowDelegateWithMaxCrossAxisExtent(
-        maxCrossAxisExtent: 600,
+    return Scaffold(
+      appBar: AppBar(title: Text(I18n.of(context).recommend_for_you)),
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final columns = max(1, (constraints.maxWidth / 600).ceil());
+          return Observer(
+            builder: (_) {
+              return SwipePagedGrid(
+                itemCount: _recomUserStore.users.length,
+                crossAxisCount: columns,
+                rowExtent:
+                    constraints.maxWidth / columns / 3 +
+                    110 * MediaQuery.textScalerOf(context).scale(1),
+                resetToken: _resetToken,
+                isLoading: _loading,
+                hasMore: () => _recomUserStore.nextUrl?.isNotEmpty == true,
+                onLoadMore: _recomUserStore.next,
+                onRefresh: _refresh,
+                loadingLabel: I18n.of(context).footer_loading,
+                emptyLabel: I18n.of(context).no_more_data,
+                retryLabel: I18n.of(context).loading_failed_retry_message,
+                refreshLabel: I18n.of(context).refresh,
+                itemBuilder: (context, index) => PainterCard(
+                  key: ValueKey(_recomUserStore.users[index].user.id),
+                  user: _recomUserStore.users[index],
+                  paged: true,
+                ),
+              );
+            },
+          );
+        },
       ),
-      itemCount: _recomUserStore.users.length,
-      itemBuilder: (context, index) {
-        final data = _recomUserStore.users[index];
-        return PainterCard(
-          user: data,
-        );
-      },
     );
   }
 }
