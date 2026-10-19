@@ -1,3 +1,18 @@
+# 关于本 Fork 与致谢
+
+本项目基于 [PixEz Flutter](https://github.com/Notsfsssf/pixez-flutter) 修改。感谢原作者 [Perol_Notsfsssf](https://github.com/Notsfsssf) 及所有贡献者的开发与维护，为本 Fork 提供了基础。
+
+本 Fork 主要用于改善墨水屏设备上的插画浏览体验，重点调整页面排版、分页导航和动画行为。目前的改动包括：
+
+- 将主要内容列表改为分页滑动浏览，并支持配置首页、速览页面的行列数量。
+- 调整作品详情页，将作品信息与相关推荐整合到统一分页中。
+- 优化大图的屏幕适配、收藏浏览位置记忆和底栏操作。
+- 取消打开作品时的过渡动画。
+
+**实体设备测试范围：目前仅在 BOOX Tab10C Pro 上进行过测试，其他实体设备的兼容性尚未验证。**
+
+---
+
 <img src="./android/app/src/main/res/mipmap-xxhdpi/ic_launcher_round.png" alt="logo" width="144" height="144" align="right" />
 
 # PixEz Flutter ![](https://camo.githubusercontent.com/f2b4fa6779c8a4825e0e7347076746a2047ed100/68747470733a2f2f696d672e736869656c64732e696f2f62616467652f6c6963656e73652d47504c2d2d332e302d6f72616e67652e737667)
