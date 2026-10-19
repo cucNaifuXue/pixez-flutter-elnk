@@ -58,7 +58,9 @@ class _RecomSpolightPageState extends State<RecomSpolightPage>
     spotlightStore = SpotlightStore(null);
     _lightingStore = LightingStore(
       ApiForceSource(
-          futureGet: (e) => apiClient.getRecommend(), glanceKey: "recom"),
+        futureGet: (e) => apiClient.getRecommend(),
+        glanceKey: "recom",
+      ),
     );
     super.initState();
     subscription = topStore.topStream.listen((event) {
@@ -82,56 +84,62 @@ class _RecomSpolightPageState extends State<RecomSpolightPage>
   Widget build(BuildContext context) {
     super.build(context);
     return SafeArea(
-      child: LayoutBuilder(builder: (context, constraints) {
-        return Column(
-          children: [
-            _buildFirstRow(context),
-            // Keep the spotlight entry available on smaller/landscape screens,
-            // but reserve the banner strip for screens with enough grid space.
-            if (constraints.maxHeight >= 600)
-              Observer(builder: (_) => _buidTagSpotlightRow(context)),
-            _buildSecondRow(context, I18n.of(context).recommend_for_you),
-            Expanded(
-              child: Observer(builder: (_) {
-                _lightingStore.iStores
-                    .removeWhere((store) => store.illusts!.hateByUser());
-                final stores = _lightingStore.iStores;
-                final orientation = MediaQuery.of(context).orientation;
-                final adaptive = orientation == Orientation.portrait
-                    ? userSetting.crossAdapt
-                    : userSetting.hCrossAdapt;
-                final columns = adaptive
-                    ? _buildSliderValue(context, orientation)
-                    : (orientation == Orientation.portrait
-                        ? userSetting.crossCount
-                        : userSetting.hCrossCount);
-                return SwipePagedGrid(
-                  footerTrailingSpace: 72,
-                  itemCount: stores.length,
-                  crossAxisCount: columns,
-                  resetToken: _resetToken,
-                  isLoading: _lightingStore.refreshing,
-                  hasMore: () => _lightingStore.nextUrl?.isNotEmpty == true,
-                  onLoadMore: _loadMore,
-                  onRefresh: _refresh,
-                  loadingLabel: I18n.of(context).footer_loading,
-                  emptyLabel: _lightingStore.errorMessage != null
-                      ? I18n.of(context).loading_failed_retry_message
-                      : I18n.of(context).no_more_data,
-                  retryLabel: I18n.of(context).loading_failed_retry_message,
-                  refreshLabel: I18n.of(context).refresh,
-                  itemBuilder: (context, index) => IllustCard(
-                    lightingStore: _lightingStore,
-                    store: stores[index],
-                    iStores: stores,
-                    fitToCell: true,
-                  ),
-                );
-              }),
-            ),
-          ],
-        );
-      }),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          return Column(
+            children: [
+              _buildFirstRow(context),
+              // Keep the spotlight entry available on smaller/landscape screens,
+              // but reserve the banner strip for screens with enough grid space.
+              if (constraints.maxHeight >= 600)
+                Observer(builder: (_) => _buidTagSpotlightRow(context)),
+              _buildSecondRow(context, I18n.of(context).recommend_for_you),
+              Expanded(
+                child: Observer(
+                  builder: (_) {
+                    _lightingStore.iStores.removeWhere(
+                      (store) => store.illusts!.hateByUser(),
+                    );
+                    final stores = _lightingStore.iStores;
+                    final orientation = MediaQuery.of(context).orientation;
+                    final adaptive = orientation == Orientation.portrait
+                        ? userSetting.crossAdapt
+                        : userSetting.hCrossAdapt;
+                    final columns = adaptive
+                        ? _buildSliderValue(context, orientation)
+                        : (orientation == Orientation.portrait
+                              ? userSetting.crossCount
+                              : userSetting.hCrossCount);
+                    return SwipePagedGrid(
+                      usePageLayout: true,
+                      footerTrailingSpace: 72,
+                      itemCount: stores.length,
+                      crossAxisCount: columns,
+                      resetToken: _resetToken,
+                      isLoading: _lightingStore.refreshing,
+                      hasMore: () => _lightingStore.nextUrl?.isNotEmpty == true,
+                      onLoadMore: _loadMore,
+                      onRefresh: _refresh,
+                      loadingLabel: I18n.of(context).footer_loading,
+                      emptyLabel: _lightingStore.errorMessage != null
+                          ? I18n.of(context).loading_failed_retry_message
+                          : I18n.of(context).no_more_data,
+                      retryLabel: I18n.of(context).loading_failed_retry_message,
+                      refreshLabel: I18n.of(context).refresh,
+                      itemBuilder: (context, index) => IllustCard(
+                        lightingStore: _lightingStore,
+                        store: stores[index],
+                        iStores: stores,
+                        fitToCell: true,
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          );
+        },
+      ),
     );
   }
 
@@ -143,14 +151,17 @@ class _RecomSpolightPageState extends State<RecomSpolightPage>
   }
 
   int _buildSliderValue(BuildContext context, Orientation orientation) {
-    final currentValue = (orientation == Orientation.portrait
-            ? userSetting.crossAdapterWidth
-            : userSetting.hCrossAdapterWidth)
-        .toDouble();
+    final currentValue =
+        (orientation == Orientation.portrait
+                ? userSetting.crossAdapterWidth
+                : userSetting.hCrossAdapterWidth)
+            .toDouble();
     var nowAdaptWidth = max(currentValue, 50.0);
     nowAdaptWidth = min(nowAdaptWidth, 2160);
-    return max((MediaQuery.of(context).size.width / nowAdaptWidth), 1.0)
-        .toInt();
+    return max(
+      (MediaQuery.of(context).size.width / nowAdaptWidth),
+      1.0,
+    ).toInt();
   }
 
   Widget _buidTagSpotlightRow(BuildContext context) {
@@ -168,46 +179,55 @@ class _RecomSpolightPageState extends State<RecomSpolightPage>
                   clipBehavior: Clip.antiAlias,
                   margin: EdgeInsets.symmetric(horizontal: 8.0),
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.all(Radius.circular(8.0))),
+                    borderRadius: BorderRadius.all(Radius.circular(8.0)),
+                  ),
                   child: Hero(
                     tag: "spotlight_image_${spotlight.hashCode}",
                     child: Material(
                       color: Colors.transparent,
                       child: InkWell(
                         onTap: () {
-                          Navigator.of(context).push(MaterialPageRoute(
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
                               builder: (BuildContext context) {
-                            return SoupPage(
-                              url: spotlight.articleUrl,
-                              spotlight: spotlight,
-                              heroTag: 'spotlight_image_${spotlight.hashCode}',
-                            );
-                          }));
+                                return SoupPage(
+                                  url: spotlight.articleUrl,
+                                  spotlight: spotlight,
+                                  heroTag:
+                                      'spotlight_image_${spotlight.hashCode}',
+                                );
+                              },
+                            ),
+                          );
                         },
                         child: Container(
-                            width: expectCardWidget,
-                            height: expectCardHeight,
-                            decoration: BoxDecoration(
-                                image: DecorationImage(
-                                    fit: BoxFit.cover,
-                                    image: PixivProvider.url(
-                                        spotlight.thumbnail))),
-                            child: Container(
-                                child: Align(
+                          width: expectCardWidget,
+                          height: expectCardHeight,
+                          decoration: BoxDecoration(
+                            image: DecorationImage(
+                              fit: BoxFit.cover,
+                              image: PixivProvider.url(spotlight.thumbnail),
+                            ),
+                          ),
+                          child: Container(
+                            child: Align(
                               alignment: Alignment.bottomCenter,
                               child: Container(
                                 decoration: BoxDecoration(
-                                    gradient: LinearGradient(
-                                  begin: Alignment.topCenter,
-                                  end: Alignment.bottomCenter,
-                                  colors: [
-                                    Colors.black.withValues(alpha: 0.0),
-                                    Colors.black.withValues(alpha: 0.5),
-                                  ],
-                                )),
+                                  gradient: LinearGradient(
+                                    begin: Alignment.topCenter,
+                                    end: Alignment.bottomCenter,
+                                    colors: [
+                                      Colors.black.withValues(alpha: 0.0),
+                                      Colors.black.withValues(alpha: 0.5),
+                                    ],
+                                  ),
+                                ),
                                 child: Padding(
                                   padding: const EdgeInsets.symmetric(
-                                      horizontal: 8.0, vertical: 8.0),
+                                    horizontal: 8.0,
+                                    vertical: 8.0,
+                                  ),
                                   child: Row(
                                     mainAxisSize: MainAxisSize.max,
                                     children: [
@@ -232,7 +252,9 @@ class _RecomSpolightPageState extends State<RecomSpolightPage>
                                   ),
                                 ),
                               ),
-                            ))),
+                            ),
+                          ),
+                        ),
                       ),
                     ),
                   ),
@@ -256,9 +278,10 @@ class _RecomSpolightPageState extends State<RecomSpolightPage>
               child: Text(
                 I18n.of(context).spotlight,
                 style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 24.0,
-                    color: Theme.of(context).textTheme.titleLarge!.color),
+                  fontWeight: FontWeight.bold,
+                  fontSize: 24.0,
+                  color: Theme.of(context).textTheme.titleLarge!.color,
+                ),
               ),
               padding: EdgeInsets.only(left: 20.0, bottom: 10.0),
             ),
@@ -270,14 +293,17 @@ class _RecomSpolightPageState extends State<RecomSpolightPage>
                 style: Theme.of(context).textTheme.bodySmall,
               ),
               onPressed: () {
-                Navigator.of(context)
-                    .push(MaterialPageRoute(builder: (BuildContext context) {
-                  return SpotLightPage();
-                }));
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (BuildContext context) {
+                      return SpotLightPage();
+                    },
+                  ),
+                );
               },
             ),
             padding: EdgeInsets.all(8.0),
-          )
+          ),
         ],
       ),
     );
@@ -298,7 +324,7 @@ class _RecomSpolightPageState extends State<RecomSpolightPage>
           ),
           padding: EdgeInsets.only(left: 20.0),
         ),
-        Expanded(child: RecomUserRoad())
+        Expanded(child: RecomUserRoad()),
       ],
     );
   }

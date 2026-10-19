@@ -17,6 +17,7 @@
 import 'dart:async';
 import 'package:material_ui/material_ui.dart' hide SearchBar;
 import 'package:flutter_mobx/flutter_mobx.dart';
+import 'package:pixez/component/artwork_page_route.dart';
 import 'package:pixez/component/pixiv_image.dart';
 import 'package:pixez/er/leader.dart';
 import 'package:pixez/i18n.dart';
@@ -209,7 +210,7 @@ class _SearchPageState extends State<SearchPage>
       },
       onLongPress: () {
         Navigator.of(context, rootNavigator: true).push(
-          MaterialPageRoute(
+          ArtworkPageRoute(
             builder: (_) => IllustLightingPage(id: tag.illust.id),
           ),
         );

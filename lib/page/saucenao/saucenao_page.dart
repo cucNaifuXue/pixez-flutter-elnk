@@ -16,6 +16,7 @@
 
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
+import 'package:pixez/component/artwork_page_route.dart';
 import 'package:pixez/i18n.dart';
 import 'package:pixez/page/picture/illust_lighting_page.dart';
 import 'package:pixez/page/saucenao/sauce_store.dart';
@@ -43,7 +44,7 @@ class _SauceNaoPageState extends State<SauceNaoPage> {
     super.initState();
     _store.observableStream.listen((event) {
       if (event != null && _store.results.isNotEmpty) {
-        Navigator.of(context).push(MaterialPageRoute(
+        Navigator.of(context).push(ArtworkPageRoute(
             builder: (context) => PageView(
                   children: _store.results
                       .map((element) => IllustLightingPage(id: element))
@@ -103,7 +104,7 @@ class _SauceNaoPageState extends State<SauceNaoPage> {
                 ),
                 onTap: () {
                   if (_store.results.isNotEmpty) {
-                    Navigator.of(context).push(MaterialPageRoute(
+                    Navigator.of(context).push(ArtworkPageRoute(
                         builder: (context) => PageView(
                               children: _store.results
                                   .map((element) =>

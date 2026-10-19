@@ -19,6 +19,7 @@ import 'dart:math';
 import 'package:flutter/rendering.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
+import 'package:pixez/component/artwork_page_route.dart';
 import 'package:pixez/component/null_hero.dart';
 import 'package:pixez/component/painter_avatar.dart';
 import 'package:pixez/component/pixiv_image.dart';
@@ -199,7 +200,7 @@ class _SoupPageState extends State<SoupPage> {
       onTap: () {
         final id = int.parse(Uri.parse(amWork.arworkLink!).pathSegments.last);
         Navigator.of(context, rootNavigator: true).push(
-          MaterialPageRoute(
+          ArtworkPageRoute(
             builder: (context) =>
                 IllustLightingPage(id: id, store: IllustStore(id, null)),
           ),

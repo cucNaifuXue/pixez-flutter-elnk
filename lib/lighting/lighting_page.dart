@@ -134,6 +134,7 @@ class _LightingListState extends State<LightingList> {
                           (widget.filter != null && !widget.filter!(illust));
                     });
                     return SwipePagedGrid(
+                      usePageLayout: true,
                       key: ObjectKey(_store),
                       itemCount: _store.iStores.length,
                       crossAxisCount: _columns(context, constraints.maxWidth),

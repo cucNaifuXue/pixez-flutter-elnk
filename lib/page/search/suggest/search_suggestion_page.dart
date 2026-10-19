@@ -18,6 +18,7 @@ import 'package:bot_toast/bot_toast.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
+import 'package:pixez/component/artwork_page_route.dart';
 import 'package:pixez/er/leader.dart';
 import 'package:pixez/i18n.dart';
 import 'package:pixez/page/picture/illust_lighting_page.dart';
@@ -52,7 +53,7 @@ class _SearchSuggestionPageState extends State<SearchSuggestionPage> {
     _sauceStore = SauceStore();
     _sauceStore.observableStream.listen((event) {
       if (event != null && _sauceStore.results.isNotEmpty) {
-        Navigator.of(context).push(MaterialPageRoute(
+        Navigator.of(context).push(ArtworkPageRoute(
             builder: (context) => PageView(
                   children: _sauceStore.results
                       .map((element) => IllustLightingPage(id: element))
@@ -128,7 +129,7 @@ class _SearchSuggestionPageState extends State<SearchSuggestionPage> {
                             title: Text(_filter.text),
                             subtitle: Text(I18n.of(context).illust_id),
                             onTap: () {
-                              Navigator.of(context).push(MaterialPageRoute(
+                              Navigator.of(context).push(ArtworkPageRoute(
                                   builder: (context) => IllustLightingPage(
                                         id: int.tryParse(_filter.text)!,
                                       )));

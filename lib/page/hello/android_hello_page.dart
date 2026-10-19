@@ -25,6 +25,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:pixez/component/painter_avatar.dart';
+import 'package:pixez/component/paged_grid_layout.dart';
 import 'package:pixez/constants.dart';
 import 'package:pixez/deep_link_plugin.dart';
 import 'package:pixez/er/leader.dart';
@@ -305,14 +306,22 @@ class _AndroidHelloPageState extends State<AndroidHelloPage> {
   late StreamSubscription _intentDataStreamSubscription;
   bool hasNewVersion = false;
 
+  Widget _withFeedLayout(Widget child) => Observer(
+    builder: (_) => PagedGridLayout(
+      rows: userSetting.feedRows,
+      columns: userSetting.feedColumns,
+      child: child,
+    ),
+  );
+
   @override
   void initState() {
     fetcher.context = context;
     Constants.type = 0;
     _pageList = [
-      RecomSpolightPage(),
+      _withFeedLayout(RecomSpolightPage()),
       RankPage(),
-      NewPage(),
+      _withFeedLayout(NewPage()),
       SearchPage(),
       SettingPage(),
     ];

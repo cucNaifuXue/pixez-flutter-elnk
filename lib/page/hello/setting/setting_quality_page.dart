@@ -220,6 +220,28 @@ class _SettingQualityPageState extends State<SettingQualityPage>
                   ),
                 ),
                 ListTile(
+                  leading: const Icon(Icons.table_rows_outlined),
+                  title: const Text('首页、速览每页行数'),
+                  trailing: SettingSelectMenu(
+                    index: userSetting.feedRows - 1,
+                    items: const ['1', '2', '3', '4'],
+                    onChange: (index) {
+                      userSetting.setFeedRows(index + 1);
+                    },
+                  ),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.view_column_outlined),
+                  title: const Text('首页、速览每页列数'),
+                  trailing: SettingSelectMenu(
+                    index: userSetting.feedColumns - 1,
+                    items: const ['1', '2', '3', '4'],
+                    onChange: (index) {
+                      userSetting.setFeedColumns(index + 1);
+                    },
+                  ),
+                ),
+                ListTile(
                   leading: const Icon(Icons.stay_primary_portrait),
                   title: Text(I18n.of(context).crosscount),
                   trailing: SettingSelectMenu(
@@ -387,9 +409,11 @@ class _SettingQualityPageState extends State<SettingQualityPage>
                 ),
                 if (!Constants.isGooglePlay && !Platform.isIOS)
                   SwitchListTile(
-                    value: Updater.result == Result.yes &&
+                    value:
+                        Updater.result == Result.yes &&
                         Updater.latestVersion != null &&
-                        userSetting.ignoreUpdateVersion == Updater.latestVersion,
+                        userSetting.ignoreUpdateVersion ==
+                            Updater.latestVersion,
                     title: Text(I18n.of(context).ignore_current_version_update),
                     onChanged: (value) async {
                       HapticUtil.light();

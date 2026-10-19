@@ -19,6 +19,7 @@ import 'dart:io';
 import 'package:bot_toast/bot_toast.dart';
 import 'package:dio/dio.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:pixez/component/artwork_page_route.dart';
 import 'package:pixez/constants.dart';
 import 'package:pixez/er/fluent_leader.dart';
 import 'package:pixez/er/lprinter.dart';
@@ -31,10 +32,12 @@ import 'package:pixez/page/hello/setting/save_eval_page.dart';
 import 'package:pixez/page/novel/series/novel_series_page.dart';
 import 'package:pixez/page/novel/viewer/novel_viewer.dart';
 import 'package:pixez/page/picture/illust_lighting_page.dart';
+import 'package:pixez/page/picture/picture_list_page.dart';
 import 'package:pixez/page/search/result_page.dart';
 import 'package:pixez/page/series/illust_series_page.dart';
 import 'package:pixez/page/soup/soup_page.dart';
 import 'package:pixez/page/user/users_page.dart';
+import 'package:pixez/page/zoom/photo_zoom_page.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher_string.dart';
 
@@ -100,7 +103,7 @@ class Leader {
       );
       if (id != null) {
         Navigator.of(context).push(
-          MaterialPageRoute(
+          ArtworkPageRoute(
             builder: (context) {
               return IllustLightingPage(id: id);
             },
@@ -190,7 +193,7 @@ class Leader {
       try {
         int id = int.parse(idSource);
         Navigator.of(context, rootNavigator: true).push(
-          MaterialPageRoute(
+          ArtworkPageRoute(
             builder: (context) {
               return IllustLightingPage(id: id);
             },
@@ -233,7 +236,7 @@ class Leader {
           try {
             int id = int.parse(paths[index + 1]);
             Navigator.of(context, rootNavigator: true).push(
-              MaterialPageRoute(
+              ArtworkPageRoute(
                 builder: (context) {
                   return IllustLightingPage(id: id);
                 },
@@ -376,8 +379,13 @@ class Leader {
         forceSkipWrap: forceSkipWrap,
       );
     }
-    return Navigator.of(
-      context,
-    ).push(MaterialPageRoute(builder: (context) => Scaffold(body: widget)));
+    final WidgetBuilder builder = (_) => Scaffold(body: widget);
+    return Navigator.of(context).push(
+      widget is IllustLightingPage ||
+              widget is PictureListPage ||
+              widget is PhotoZoomPage
+          ? ArtworkPageRoute(builder: builder)
+          : MaterialPageRoute(builder: builder),
+    );
   }
 }

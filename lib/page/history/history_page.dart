@@ -19,6 +19,7 @@ import 'dart:math';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:pixez/component/artwork_page_route.dart';
 import 'package:pixez/component/pixiv_image.dart';
 import 'package:pixez/component/swipe_paged_grid.dart';
 import 'package:pixez/i18n.dart';
@@ -72,7 +73,7 @@ class HistoryPage extends HookConsumerWidget {
                 onTap: () {
                   HapticUtil.selectionClick();
                   Navigator.of(context, rootNavigator: true).push(
-                    MaterialPageRoute(
+                    ArtworkPageRoute(
                       builder: (BuildContext context) {
                         return IllustLightingPage(
                           id: reIllust[index].illustId,

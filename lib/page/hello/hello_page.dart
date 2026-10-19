@@ -20,6 +20,7 @@ import 'dart:ui';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
 import 'package:pixez/component/painter_avatar.dart';
+import 'package:pixez/component/paged_grid_layout.dart';
 import 'package:pixez/constants.dart';
 import 'package:pixez/deep_link_plugin.dart';
 import 'package:pixez/er/leader.dart';
@@ -57,13 +58,15 @@ class _HelloPageState extends State<HelloPage> {
   @override
   void initState() {
     _lists = <Widget>[
-      Observer(
-        builder: (context) {
-          if (accountStore.now != null)
-            return RecomSpolightPage();
-          else
-            return PreviewPage();
-        },
+      _withFeedLayout(
+        Observer(
+          builder: (context) {
+            if (accountStore.now != null)
+              return RecomSpolightPage();
+            else
+              return PreviewPage();
+          },
+        ),
       ),
       Observer(
         builder: (context) {
@@ -78,7 +81,7 @@ class _HelloPageState extends State<HelloPage> {
             );
         },
       ),
-      NewPage(),
+      _withFeedLayout(NewPage()),
       SearchPage(),
       SettingPage(),
     ];
@@ -96,6 +99,14 @@ class _HelloPageState extends State<HelloPage> {
     initLinksStream();
     initPlatformState();
   }
+
+  Widget _withFeedLayout(Widget child) => Observer(
+    builder: (_) => PagedGridLayout(
+      rows: userSetting.feedRows,
+      columns: userSetting.feedColumns,
+      child: child,
+    ),
+  );
 
   Future<void> initPlatformState() async {
     WidgetsBinding.instance.addPostFrameCallback((timeStamp) {

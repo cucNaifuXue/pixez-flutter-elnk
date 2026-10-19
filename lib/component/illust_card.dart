@@ -19,6 +19,7 @@ import 'dart:io';
 import 'package:bot_toast/bot_toast.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
+import 'package:pixez/component/artwork_page_route.dart';
 import 'package:pixez/component/null_hero.dart';
 import 'package:pixez/component/pixiv_image.dart';
 import 'package:pixez/component/star_icon.dart';
@@ -144,7 +145,7 @@ class _IllustCardState extends State<IllustCard> {
 
   Future _buildTap(BuildContext context) {
     return Navigator.of(context, rootNavigator: true).push(
-      MaterialPageRoute(
+      ArtworkPageRoute(
         builder: (_) {
           return PictureListPage(
             iStores: iStores!,
@@ -334,7 +335,7 @@ class _IllustCardState extends State<IllustCard> {
   Future<void> _buildInkTap(BuildContext context, String heroTag) async {
     HapticUtil.selectionClick();
     await Navigator.of(context, rootNavigator: true).push(
-      MaterialPageRoute(
+      ArtworkPageRoute(
         builder: (_) {
           if (iStores != null) {
             return PictureListPage(

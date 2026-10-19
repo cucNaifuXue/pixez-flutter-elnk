@@ -135,6 +135,7 @@ class _PreviewPageState extends State<PreviewPage> {
       builder: (_) {
         return SafeArea(
           child: SwipePagedGrid(
+            usePageLayout: true,
             crossAxisCount: 2,
             isLoading: _lightingStore.refreshing,
             hasMore: () => _lightingStore.nextUrl?.isNotEmpty == true,

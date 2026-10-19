@@ -23,12 +23,11 @@ import 'package:flutter/services.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
 import 'package:pixez/component/ban_page.dart';
 import 'package:pixez/component/common_back_area.dart';
-import 'package:pixez/component/detail_jump_button.dart';
-import 'package:pixez/component/null_hero.dart';
 import 'package:pixez/component/painter_avatar.dart';
 import 'package:pixez/component/pixiv_image.dart';
 import 'package:pixez/component/star_icon.dart';
-import 'package:pixez/er/illust_cacher.dart';
+import 'package:pixez/component/artwork_image_controls.dart';
+import 'package:pixez/component/swipe_paged_grid.dart';
 import 'package:pixez/er/leader.dart';
 import 'package:pixez/er/lprinter.dart';
 import 'package:pixez/i18n.dart';
@@ -39,11 +38,10 @@ import 'package:pixez/models/illust.dart';
 import 'package:pixez/lighting/lighting_store.dart';
 import 'package:pixez/network/api_client.dart';
 import 'package:pixez/page/picture/illust_related_grid.dart';
-import 'package:pixez/page/picture/illust_detail_content.dart';
+import 'package:pixez/page/picture/illust_overview_page.dart';
 import 'package:pixez/page/picture/illust_row_page.dart';
 import 'package:pixez/page/picture/illust_store.dart';
 import 'package:pixez/page/picture/tag_for_illust_page.dart';
-import 'package:pixez/page/picture/ugoira_loader.dart';
 import 'package:pixez/page/picture/user_follow_button.dart';
 import 'package:pixez/utils/haptic_util.dart';
 import 'package:pixez/page/report/report_items_page.dart';
@@ -134,14 +132,13 @@ class _IllustVerticalPageState extends State<IllustVerticalPage>
   UserStore? userStore;
   late IllustStore _illustStore;
   late LightingStore _aboutStore;
-  late ScrollController _scrollController;
   bool tempView = false;
-  final _detailKey = GlobalKey<ScaffoldState>();
+  final _detailPager = SwipePagedGridController();
+  final _imageController = ArtworkImageController();
 
   @override
   void initState() {
     _focusNode = FocusNode();
-    _scrollController = ScrollController();
     _illustStore = widget.store ?? IllustStore(widget.id, null);
     _illustStore.fetch();
     _aboutStore = LightingStore(
@@ -160,15 +157,13 @@ class _IllustVerticalPageState extends State<IllustVerticalPage>
       _aboutStore = LightingStore(
         ApiSource(futureGet: () => apiClient.getIllustRelated(widget.id)),
       )..fetch();
+      userStore = null;
       LPrinter.d("state change");
     }
   }
 
   void _loadAbout() {
-    if (mounted &&
-        _scrollController.hasClients &&
-        _aboutStore.iStores.isEmpty &&
-        !_aboutStore.refreshing) {
+    if (mounted && _aboutStore.iStores.isEmpty && !_aboutStore.refreshing) {
       _aboutStore.fetch();
     }
   }
@@ -199,8 +194,9 @@ class _IllustVerticalPageState extends State<IllustVerticalPage>
   @override
   void dispose() {
     _illustStore.dispose();
-    _scrollController.dispose();
     _aboutStore.dispose();
+    _detailPager.dispose();
+    _imageController.dispose();
     _focusNode.dispose();
     super.dispose();
   }
@@ -219,10 +215,6 @@ class _IllustVerticalPageState extends State<IllustVerticalPage>
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  DetailJumpButton(
-                    anchorKey: _detailKey,
-                    scrollController: _scrollController,
-                  ),
                   Builder(
                     builder: (buttonContext) {
                       return IconButton(
@@ -254,6 +246,47 @@ class _IllustVerticalPageState extends State<IllustVerticalPage>
     return _buildBody(context);
   }
 
+  Widget _buildBookmarkAction() => GestureDetector(
+    onLongPress: _showBookMarkTag,
+    onHorizontalDragEnd: widget.onHorizontalDragEnd,
+    child: Observer(
+      builder: (context) => IconButton(
+        tooltip: I18n.of(context).bookmark,
+        onPressed: () async {
+          if (userSetting.saveAfterStar && (_illustStore.state == 0)) {
+            saveStore.saveImage(_illustStore.illusts!);
+          }
+          // TODO: 添加配置项 开关和过滤器
+          final List<String>? tags;
+          if (userSetting.autoTagWhenStar) {
+            final filters = [RegExp(r"\d+users入り")];
+            tags = _illustStore.illusts!.tags
+                .map((tag) => tag.name)
+                .where((tag) => !filters.any((regex) => regex.hasMatch(tag)))
+                .toList();
+          } else {
+            tags = null;
+          }
+          bool success = await _illustStore.star(
+            restrict: userSetting.defaultPrivateLike ? "private" : "public",
+            tags: tags,
+          );
+          if (success && userSetting.followAfterStar) {
+            bool followSuccess = await _illustStore.followAfterStar();
+            if (followSuccess) {
+              userStore?.isFollow = true;
+              BotToast.showText(
+                text:
+                    "${_illustStore.illusts!.user.name} ${I18n.of(context).followed}",
+              );
+            }
+          }
+        },
+        icon: StarIcon(state: _illustStore.state),
+      ),
+    ),
+  );
+
   Widget _buildBody(BuildContext context) {
     return Container(
       child: GestureDetector(
@@ -264,67 +297,6 @@ class _IllustVerticalPageState extends State<IllustVerticalPage>
         child: Scaffold(
           extendBody: true,
           extendBodyBehindAppBar: true,
-          floatingActionButton: GestureDetector(
-            onLongPress: () {
-              _showBookMarkTag();
-            },
-            onHorizontalDragEnd: (DragEndDetails detail) {
-              if (widget.onHorizontalDragEnd != null) {
-                widget.onHorizontalDragEnd!(detail);
-              }
-            },
-            child: Observer(
-              builder: (context) {
-                return Visibility(
-                  visible: _illustStore.errorMessage == null,
-                  child: FloatingActionButton(
-                    heroTag: widget.id,
-                    onPressed: () async {
-                      if (userSetting.saveAfterStar &&
-                          (_illustStore.state == 0)) {
-                        saveStore.saveImage(_illustStore.illusts!);
-                      }
-                      // TODO: 添加配置项 开关和过滤器
-                      final List<String>? tags;
-                      if (userSetting.autoTagWhenStar) {
-                        final filters = [RegExp(r"\d+users入り")];
-                        tags = _illustStore.illusts!.tags
-                            .map((tag) => tag.name)
-                            .where(
-                              (tag) =>
-                                  !filters.any((regex) => regex.hasMatch(tag)),
-                            )
-                            .toList();
-                      } else {
-                        tags = null;
-                      }
-                      bool success = await _illustStore.star(
-                        restrict: userSetting.defaultPrivateLike
-                            ? "private"
-                            : "public",
-                        tags: tags,
-                      );
-                      if (success && userSetting.followAfterStar) {
-                        bool followSuccess = await _illustStore.followAfterStar();
-                        if (followSuccess) {
-                          userStore?.isFollow = true;
-                          BotToast.showText(
-                            text:
-                                "${_illustStore.illusts!.user.name} ${I18n.of(context).followed}",
-                          );
-                        }
-                      }
-                    },
-                    child: Observer(
-                      builder: (_) {
-                        return StarIcon(state: _illustStore.state);
-                      },
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
           body: Observer(
             builder: (_) {
               final banWidget = banLogic(context);
@@ -438,131 +410,34 @@ class _IllustVerticalPageState extends State<IllustVerticalPage>
         ),
       );
     if (userStore == null) userStore = UserStore(data.user.id, null, data.user);
-    return CustomScrollView(
-      controller: _scrollController,
-      slivers: [
-        if (userSetting.isBangs || ((data.width / data.height) > 5))
-          SliverToBoxAdapter(
-            child: Container(height: MediaQuery.of(context).padding.top),
-          ),
-        ..._buildPhotoList(data),
-        SliverToBoxAdapter(child: SizedBox.shrink(key: _detailKey)),
-        SliverToBoxAdapter(
-          child: IllustDetailContent(
-            illusts: data,
-            userStore: userStore,
-            illustStore: _illustStore,
-            loadAbout: () {
-              _loadAbout();
-            },
-          ),
-        ),
-        SliverToBoxAdapter(
-          child: IllustRelatedGrid(
-            key: ValueKey(widget.id),
-            store: _aboutStore,
-            scrollController: _scrollController,
-            onShowDetails: () {
-              final detailContext = _detailKey.currentContext;
-              if (detailContext != null) {
-                Scrollable.ensureVisible(detailContext);
-              }
-            },
-          ),
-        ),
-      ],
+    _imageController.configure(
+      artworkId: data.id,
+      imageCount: data.metaPages.length,
     );
-  }
-
-  List<Widget> _buildPhotoList(Illusts data) {
-    final height =
-        ((data.height.toDouble() / data.width) *
-        MediaQuery.of(context).size.width);
-    return [
-      if (data.type == "ugoira")
-        SliverToBoxAdapter(
-          child: NullHero(
-            tag: widget.heroString,
-            child: UgoiraLoader(id: widget.id, illusts: data),
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.only(top: kToolbarHeight),
+        child: IllustRelatedGrid(
+          key: ValueKey(widget.id),
+          store: _aboutStore,
+          controller: _detailPager,
+          footerAction: _buildBookmarkAction(),
+          imageNavigation: ArtworkImageControls(controller: _imageController),
+          firstPageBuilder: (context) => IllustOverviewPage(
+            key: ValueKey(data.id),
+            illusts: data,
+            illustStore: _illustStore,
+            userStore: userStore,
+            heroString: widget.heroString,
+            loadAbout: _loadAbout,
+            onLongPressImage: (index) => _pressSave(data, index),
+            onShowRelated: _detailPager.nextPage,
+            embedded: true,
+            imageController: _imageController,
           ),
         ),
-      if (data.type != "ugoira")
-        data.pageCount == 1
-            ? SliverList(
-                delegate: SliverChildBuilderDelegate((
-                  BuildContext context,
-                  int index,
-                ) {
-                  String url = data.illustDetailUrl;
-                  if (data.type == "manga") {
-                    url = data.managaDetailUrl;
-                  }
-                  Widget placeWidget = Container(height: height);
-                  return InkWell(
-                    onLongPress: () {
-                      _pressSave(data, 0);
-                    },
-                    onTap: () {
-                      Leader.push(
-                        context,
-                        PhotoZoomPage(
-                          index: 0,
-                          illusts: data,
-                          illustStore: _illustStore,
-                        ),
-                      );
-                    },
-                    child: NullHero(
-                      tag: widget.heroString,
-                      child: PixivImage(
-                        url,
-                        fade: false,
-                        width: MediaQuery.of(context).size.width,
-                        cacheHeaderData: PixEzCacheHeaderData(
-                          key: '${data.id}_0',
-                          quality: IllustQualityExtension.fromValue(
-                            data.type == "manga"
-                                ? userSetting.mangaQuality
-                                : userSetting.pictureQuality,
-                          ),
-                        ),
-                        placeWidget: (url != data.imageUrls.medium)
-                            ? PixivImage(
-                                data.imageUrls.medium,
-                                width: MediaQuery.of(context).size.width,
-                                placeWidget: placeWidget,
-                                fade: false,
-                              )
-                            : placeWidget,
-                      ),
-                    ),
-                  );
-                }, childCount: 1),
-              )
-            : SliverList(
-                delegate: SliverChildBuilderDelegate((
-                  BuildContext context,
-                  int index,
-                ) {
-                  return InkWell(
-                    onLongPress: () {
-                      _pressSave(data, index);
-                    },
-                    onTap: () {
-                      Leader.push(
-                        context,
-                        PhotoZoomPage(
-                          index: index,
-                          illusts: data,
-                          illustStore: _illustStore,
-                        ),
-                      );
-                    },
-                    child: _buildIllustsItem(index, data, height),
-                  );
-                }, childCount: data.metaPages.length),
-              ),
-    ];
+      ),
+    );
   }
 
   Center _buildErrorContent(BuildContext context) {
@@ -588,99 +463,6 @@ class _IllustVerticalPageState extends State<IllustVerticalPage>
         ],
       ),
     );
-  }
-
-  Widget _buildIllustsItem(int index, Illusts illust, double height) {
-    if (illust.type == "manga") {
-      String url = illust.managaDetailImageUrl(index);
-      if (index == 0)
-        return NullHero(
-          child: PixivImage(
-            url,
-            placeWidget: PixivImage(
-              illust.metaPages[index].imageUrls!.medium,
-              width: MediaQuery.of(context).size.width,
-              fade: false,
-            ),
-            cacheHeaderData: PixEzCacheHeaderData(
-              key: '${illust.id}_${index}',
-              quality: IllustQualityExtension.fromValue(
-                userSetting.mangaQuality,
-              ),
-            ),
-            width: MediaQuery.of(context).size.width,
-            fade: false,
-          ),
-          tag: widget.heroString,
-        );
-      return PixivImage(
-        url,
-        fade: false,
-        width: MediaQuery.of(context).size.width,
-        cacheHeaderData: PixEzCacheHeaderData(
-          key: '${illust.id}_${index}',
-          quality: IllustQualityExtension.fromValue(userSetting.mangaQuality),
-        ),
-        placeWidget: Container(
-          height: height,
-          child: Center(
-            child: Text(
-              '$index',
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
-          ),
-        ),
-      );
-    }
-    return index == 0
-        ? (userSetting.pictureQuality >= 1
-              ? NullHero(
-                  child: PixivImage(
-                    illust.illustDetailImageUrl(index),
-                    placeWidget: PixivImage(
-                      illust.metaPages[index].imageUrls!.medium,
-                      fade: false,
-                    ),
-                    fade: false,
-                    cacheHeaderData: PixEzCacheHeaderData(
-                      key: '${illust.id}_${index}',
-                      quality: IllustQualityExtension.fromValue(
-                        userSetting.pictureQuality,
-                      ),
-                    ),
-                  ),
-                  tag: widget.heroString,
-                )
-              : NullHero(
-                  child: PixivImage(
-                    illust.metaPages[index].imageUrls!.medium,
-                    fade: false,
-                    cacheHeaderData: PixEzCacheHeaderData(
-                      key: '${illust.id}_${index}',
-                      quality: IllustQuality.medium,
-                    ),
-                  ),
-                  tag: widget.heroString,
-                ))
-        : PixivImage(
-            illust.illustDetailImageUrl(index),
-            cacheHeaderData: PixEzCacheHeaderData(
-              key: '${illust.id}_${index}',
-              quality: IllustQualityExtension.fromValue(
-                userSetting.pictureQuality,
-              ),
-            ),
-            fade: false,
-            placeWidget: Container(
-              height: height,
-              child: Center(
-                child: Text(
-                  '$index',
-                  style: Theme.of(context).textTheme.headlineMedium,
-                ),
-              ),
-            ),
-          );
   }
 
   Future _longPressTag(BuildContext context, Tags f) async {
@@ -1116,8 +898,10 @@ class _IllustVerticalPageState extends State<IllustVerticalPage>
       barrierColor: Colors.black.withValues(alpha: 0.35),
       transitionDuration: const Duration(milliseconds: 180),
       pageBuilder: (dialogContext, animation, secondaryAnimation) {
-        final width =
-            (MediaQuery.sizeOf(dialogContext).width - 24).clamp(0.0, 320.0);
+        final width = (MediaQuery.sizeOf(dialogContext).width - 24).clamp(
+          0.0,
+          320.0,
+        );
         return SafeArea(
           child: Align(
             alignment: Alignment.topRight,
@@ -1143,7 +927,9 @@ class _IllustVerticalPageState extends State<IllustVerticalPage>
                         _buildNameAvatar(dialogContext, illusts),
                         if (illusts.metaPages.isNotEmpty)
                           ListTile(
-                            title: Text(I18n.of(dialogContext).muti_choice_save),
+                            title: Text(
+                              I18n.of(dialogContext).muti_choice_save,
+                            ),
                             leading: Icon(Icons.save),
                             onTap: () async {
                               Navigator.of(dialogContext).pop();
@@ -1154,8 +940,9 @@ class _IllustVerticalPageState extends State<IllustVerticalPage>
                           title: Text(I18n.of(dialogContext).copymessage),
                           leading: Icon(Icons.local_library),
                           onTap: () async {
-                            final str =
-                                userSetting.illustToShareInfoText(illusts);
+                            final str = userSetting.illustToShareInfoText(
+                              illusts,
+                            );
                             await Clipboard.setData(ClipboardData(text: str));
                             BotToast.showText(
                               text: I18n.of(dialogContext).copied_to_clipboard,
@@ -1227,8 +1014,9 @@ class _IllustVerticalPageState extends State<IllustVerticalPage>
                                 builder: (context) {
                                   return AlertDialog(
                                     title: Text(I18n.of(context).report),
-                                    content:
-                                        Text(I18n.of(context).report_message),
+                                    content: Text(
+                                      I18n.of(context).report_message,
+                                    ),
                                     actions: <Widget>[
                                       TextButton(
                                         child: Text(I18n.of(context).cancel),
@@ -1289,7 +1077,11 @@ class _IllustVerticalPageState extends State<IllustVerticalPage>
       if (userSetting.saveAfterStar && (_illustStore.state == 0)) {
         saveStore.saveImage(_illustStore.illusts!);
       }
-      bool success = await _illustStore.star(restrict: restrict, tags: tags, force: true);
+      bool success = await _illustStore.star(
+        restrict: restrict,
+        tags: tags,
+        force: true,
+      );
       if (success && userSetting.followAfterStar) {
         await _illustStore.followAfterStar();
       }

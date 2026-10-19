@@ -52,6 +52,8 @@ abstract class _UserSetting with Store {
       "welcome_page_num_ios_migration_v2";
   static const String CROSS_COUNT_KEY = "cross_count";
   static const String H_CROSS_COUNT_KEY = "h_cross_count";
+  static const String FEED_ROWS_KEY = "feed_rows";
+  static const String FEED_COLUMNS_KEY = "feed_columns";
   static const String PICTURE_QUALITY_KEY = "picture_quality";
   static const String MANGA_QUALITY_KEY = "manga_quality";
   static const String IS_BANGS_KEY = "is_bangs";
@@ -151,6 +153,10 @@ abstract class _UserSetting with Store {
   int crossCount = 2;
   @observable
   int hCrossCount = 4;
+  @observable
+  int feedRows = 1;
+  @observable
+  int feedColumns = 2;
   @observable
   int? displayMode;
   @observable
@@ -469,6 +475,8 @@ abstract class _UserSetting with Store {
     hCrossAdapterWidth = min(2160, max(50, hCrossAdapterV));
     crossCount = prefs.getInt(CROSS_COUNT_KEY) ?? 2;
     hCrossCount = prefs.getInt(H_CROSS_COUNT_KEY) ?? 4;
+    feedRows = (prefs.getInt(FEED_ROWS_KEY) ?? 1).clamp(1, 4);
+    feedColumns = (prefs.getInt(FEED_COLUMNS_KEY) ?? 2).clamp(1, 4);
     feedAIBadge = prefs.getBool(FEED_AI_BADGE_KEY) ?? true;
     padMode = prefs.getInt(PAD_MODE_KEY) ?? 0;
     await Hoster.initMap();
@@ -657,6 +665,18 @@ abstract class _UserSetting with Store {
   setHCrossCount(int value) async {
     hCrossCount = value;
     await prefs.setInt(H_CROSS_COUNT_KEY, value);
+  }
+
+  @action
+  Future<void> setFeedRows(int value) async {
+    feedRows = value.clamp(1, 4);
+    await prefs.setInt(FEED_ROWS_KEY, feedRows);
+  }
+
+  @action
+  Future<void> setFeedColumns(int value) async {
+    feedColumns = value.clamp(1, 4);
+    await prefs.setInt(FEED_COLUMNS_KEY, feedColumns);
   }
 
   @action

@@ -47,7 +47,8 @@ class BookmarkPage extends StatefulWidget {
   _BookmarkPageState createState() => _BookmarkPageState();
 }
 
-class _BookmarkPageState extends State<BookmarkPage> {
+class _BookmarkPageState extends State<BookmarkPage>
+    with AutomaticKeepAliveClientMixin {
   late LightSource futureGet;
   String restrict = 'public';
   late StreamSubscription<String> subscription;
@@ -76,6 +77,7 @@ class _BookmarkPageState extends State<BookmarkPage> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     if (accountStore.now != null) {
       if (int.parse(accountStore.now!.userId) == widget.id) {
         return Stack(
@@ -101,6 +103,9 @@ class _BookmarkPageState extends State<BookmarkPage> {
       return Container();
     }
   }
+
+  @override
+  bool get wantKeepAlive => true;
 
   Widget buildTopChip(BuildContext context) {
     return Align(
@@ -202,7 +207,8 @@ class BookMarkNestedPage extends StatefulWidget {
   State<BookMarkNestedPage> createState() => _BookMarkNestedPageState();
 }
 
-class _BookMarkNestedPageState extends State<BookMarkNestedPage> {
+class _BookMarkNestedPageState extends State<BookMarkNestedPage>
+    with AutomaticKeepAliveClientMixin {
   int _resetToken = 0;
   late LightingStore _store;
   String restrict = 'public';
@@ -254,6 +260,7 @@ class _BookMarkNestedPageState extends State<BookMarkNestedPage> {
                   child: height < 160
                       ? null
                       : SwipePagedGrid(
+                          usePageLayout: true,
                           itemCount: itemCount,
                           crossAxisCount: columns,
                           resetToken: _resetToken,
@@ -331,12 +338,16 @@ class _BookMarkNestedPageState extends State<BookMarkNestedPage> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     return Observer(
       builder: (_) {
         return _buildContent(context);
       },
     );
   }
+
+  @override
+  bool get wantKeepAlive => true;
 
   int _crossAxisCount() {
     if (MediaQuery.of(context).orientation == Orientation.portrait

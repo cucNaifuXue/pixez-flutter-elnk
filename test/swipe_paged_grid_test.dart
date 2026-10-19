@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:pixez/component/paged_grid_layout.dart';
 import 'package:pixez/component/swipe_paged_grid.dart';
 
 Future<void> mountGrid(
@@ -14,6 +15,8 @@ Future<void> mountGrid(
   int resetToken = 0,
   double? rowExtent,
   VoidCallback? onInteractionStart,
+  int? pageRows,
+  int pageColumns = 2,
 }) async {
   await tester.binding.setSurfaceSize(const Size(800, 900));
   await tester.pumpWidget(
@@ -23,22 +26,27 @@ Future<void> mountGrid(
           child: SizedBox(
             width: 400,
             height: 640,
-            child: ValueListenableBuilder<int>(
-              valueListenable: count,
-              builder: (context, itemCount, _) => SwipePagedGrid(
-                itemCount: itemCount,
-                crossAxisCount: columns,
-                resetToken: resetToken,
-                rowExtent: rowExtent,
-                onInteractionStart: onInteractionStart,
-                itemBuilder: (_, index) => Center(child: Text('art-$index')),
-                hasMore: hasMore,
-                onLoadMore: onLoadMore,
-                onRefresh: onRefresh ?? () async => true,
-                loadingLabel: 'Loading',
-                emptyLabel: 'Empty',
-                retryLabel: 'Retry',
-                refreshLabel: 'Refresh',
+            child: PagedGridLayout(
+              rows: pageRows ?? 1,
+              columns: pageColumns,
+              child: ValueListenableBuilder<int>(
+                valueListenable: count,
+                builder: (context, itemCount, _) => SwipePagedGrid(
+                  itemCount: itemCount,
+                  crossAxisCount: columns,
+                  usePageLayout: pageRows != null,
+                  resetToken: resetToken,
+                  rowExtent: rowExtent,
+                  onInteractionStart: onInteractionStart,
+                  itemBuilder: (_, index) => Center(child: Text('art-$index')),
+                  hasMore: hasMore,
+                  onLoadMore: onLoadMore,
+                  onRefresh: onRefresh ?? () async => true,
+                  loadingLabel: 'Loading',
+                  emptyLabel: 'Empty',
+                  retryLabel: 'Retry',
+                  refreshLabel: 'Refresh',
+                ),
               ),
             ),
           ),
@@ -54,6 +62,42 @@ Future<void> nextPage(WidgetTester tester) async {
 }
 
 void main() {
+  testWidgets(
+    'configured rows and columns replace adaptive sizing immediately',
+    (tester) async {
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final count = ValueNotifier(32);
+      addTearDown(count.dispose);
+      Future<void> configure(int rows, int columns) => mountGrid(
+        tester,
+        count: count,
+        hasMore: () => false,
+        onLoadMore: () async => true,
+        pageRows: rows,
+        pageColumns: columns,
+      );
+
+      await configure(1, 2);
+      expect(find.text('1 / 16'), findsOneWidget);
+      expect(find.text('art-1'), findsOneWidget);
+      expect(find.text('art-2'), findsNothing);
+      await configure(4, 4);
+      expect(find.text('1 / 2'), findsOneWidget);
+      expect(find.text('art-15'), findsOneWidget);
+      expect(find.text('art-16'), findsNothing);
+      final first = tester.getRect(find.text('art-0'));
+      expect(tester.getRect(find.text('art-3')).top, first.top);
+      expect(tester.getRect(find.text('art-4')).left, first.left);
+      await nextPage(tester);
+      expect(find.text('art-16'), findsOneWidget);
+      await configure(1, 1);
+      expect(find.text('17 / 32'), findsOneWidget);
+      expect(find.text('art-16'), findsOneWidget);
+      expect(find.text('art-17'), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('swipe changes a whole page only after release', (tester) async {
     addTearDown(() => tester.binding.setSurfaceSize(null));
     final count = ValueNotifier(12);
