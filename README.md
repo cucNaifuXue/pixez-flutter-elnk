@@ -50,6 +50,10 @@
     <td align="center"><a href="https://github.com/itzXian"><img src="https://avatars1.githubusercontent.com/u/34748039?v=4" width="100px;" alt=""/><br /><sub><b>Xian</b></sub></a><br /><a href="#translation-itzXian" title="Translation">🌍 (en_US)</a></td>
     <td align="center"><a href="https://github.com/ReikiAigawara"><img src="https://avatars1.githubusercontent.com/u/66962815?v=4" width="100px;" alt=""/><br /><sub><b>Reiki Aigawara</b></sub></a><br /><a href="#translation-ReikiAigawara" title="Translation">🌍 (id_ID)</a></td>
   </tr>
+  <tr>
+    <td align="center"><a href="https://github.com/cucNaifuXue"><img src="https://avatars.githubusercontent.com/u/68451874?v=4" width="100px;" alt="cucNaifuXue"/><br /><sub><b>cucNaifuXue</b></sub></a><br /><a href="https://github.com/cucNaifuXue/pixez-flutter-elnk/commits?author=cucNaifuXue" title="Code">💻</a></td>
+    <td align="center"><a href="https://github.com/codex"><img src="https://github.com/codex.png?size=100" width="100px;" alt="Codex"/><br /><sub><b>Codex</b></sub></a><br /><a href="https://github.com/cucNaifuXue/pixez-flutter-elnk/commits?author=codex" title="Code">💻</a></td>
+  </tr>
 </table>
 
 如果你是有能人士，愿意为本项目贡献代码，请不要犹豫提交 Pull Request 吧！
